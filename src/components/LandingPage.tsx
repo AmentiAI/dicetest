@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { getJson } from "@/lib/http";
 import { SOLANA_NETWORK } from "@/lib/solana/constants";
 
 type Stats = {
@@ -18,9 +19,8 @@ export function LandingPage() {
   useEffect(() => {
     let stop = false;
     const tick = async () => {
-      const res = await fetch("/api/stats");
-      const json = await res.json();
-      if (!stop) setStats(json);
+      const json = await getJson<Stats>("/api/stats");
+      if (!stop && json) setStats(json);
     };
     void tick();
     const t = setInterval(() => void tick(), 8000);
@@ -36,7 +36,13 @@ export function LandingPage() {
     <div className="landing">
       <section className="hero">
         <div className="hero-copy">
-          <h1>BLOCK DICE</h1>
+          <h1 className="hero-title">
+            {"BLOCK DICE".split("").map((ch, i) => (
+              <span key={i} style={{ animationDelay: `${i * 0.06}s` }}>
+                {ch === " " ? "\u00a0" : ch}
+              </span>
+            ))}
+          </h1>
           <p className="tagline">
             STREET DICE. ON-CHAIN PROOF. NO HIDDEN ROLLS.
           </p>
@@ -104,6 +110,19 @@ export function LandingPage() {
 }
 
 function HeroDice() {
+  const [left, setLeft] = useState(5);
+  const [right, setRight] = useState(2);
+  const [flip, setFlip] = useState(false);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setLeft(1 + Math.floor(Math.random() * 6));
+      setRight(1 + Math.floor(Math.random() * 6));
+      setFlip((v) => !v);
+    }, 1600);
+    return () => clearInterval(t);
+  }, []);
+
   return (
     <div className="hero-art" aria-hidden>
       <div className="orbit orbit-a">
@@ -114,12 +133,14 @@ function HeroDice() {
         <span>BLOCK</span>
         <span>1V1 POT</span>
       </div>
-      <div className="glow-dice">
+      <div className="hero-burst" />
+      <div className={`glow-dice ${flip ? "is-flip" : ""}`}>
         <div className="gd gd-left">
-          <span>5</span>
+          <span key={left}>{left}</span>
         </div>
+        <div className="vs-flash">VS</div>
         <div className="gd gd-right">
-          <span>2</span>
+          <span key={right}>{right}</span>
         </div>
       </div>
     </div>

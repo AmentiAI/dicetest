@@ -43,12 +43,18 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const pda = String(body.pda ?? "");
-  const duelId = String(body.duelId ?? "");
-  const hostWallet = String(body.hostWallet ?? "");
-  const wagerLamports = String(body.wagerLamports ?? "");
-  const createSignature = String(body.createSignature ?? "");
+  try {
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "invalid json body" }, { status: 400 });
+    }
+    const pda = String((body as { pda?: unknown }).pda ?? "");
+    const duelId = String((body as { duelId?: unknown }).duelId ?? "");
+    const hostWallet = String((body as { hostWallet?: unknown }).hostWallet ?? "");
+    const wagerLamports = String((body as { wagerLamports?: unknown }).wagerLamports ?? "");
+    const createSignature = String(
+      (body as { createSignature?: unknown }).createSignature ?? "",
+    );
 
   if (!pda || !duelId || !hostWallet || !wagerLamports || !createSignature) {
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
@@ -96,4 +102,8 @@ export async function POST(req: Request) {
 
   const room = await db().query.rooms.findFirst({ where: eq(rooms.id, pda) });
   return NextResponse.json({ room });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "room create failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

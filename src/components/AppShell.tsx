@@ -9,6 +9,7 @@ import { WalletButton } from "./WalletButton";
 import { IdentityModal } from "./IdentityModal";
 import { ProfileProvider, useProfile } from "./ProfileProvider";
 import { formatUsd } from "@/lib/format";
+import { getJson } from "@/lib/http";
 import { SOLANA_NETWORK } from "@/lib/solana/constants";
 
 const LINKS = [
@@ -35,10 +36,9 @@ function Header() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/price")
-      .then((r) => r.json())
-      .then((j) => setPrice(j.usd ?? null))
-      .catch(() => null);
+    void getJson<{ usd: number | null }>("/api/price").then((j) =>
+      setPrice(j?.usd ?? null),
+    );
   }, []);
 
   useEffect(() => {
@@ -132,9 +132,32 @@ function ShellInner({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-frame">
+      <SparkField />
       <Header />
       <main className="stage">{children}</main>
       {needIdentity ? <IdentityModal /> : null}
+    </div>
+  );
+}
+
+function SparkField() {
+  return (
+    <div className="fx-layer" aria-hidden>
+      <div className="fx-aurora" />
+      <div className="fx-grid" />
+      <div className="fx-scan" />
+      <div className="fx-sparks">
+        {Array.from({ length: 22 }, (_, i) => (
+          <i
+            key={i}
+            style={{
+              left: `${(i * 17 + 3) % 98}%`,
+              animationDelay: `${(i * 0.41) % 9}s`,
+              animationDuration: `${6 + (i % 6)}s`,
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

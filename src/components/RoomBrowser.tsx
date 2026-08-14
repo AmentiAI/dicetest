@@ -111,10 +111,15 @@ export function RoomBrowser() {
             wager lands in a PDA on Solana.
           </div>
         ) : (
-          shown.map((r) => {
+          shown.map((r, i) => {
             const sol = Number(r.wagerLamports) / 1e9;
             return (
-              <Link href={`/duel/${r.id}`} key={r.id} className="room-card">
+              <Link
+                href={`/duel/${r.id}`}
+                key={r.id}
+                className="room-card"
+                style={{ animationDelay: `${i * 0.06}s` }}
+              >
                 <DemonPortrait id={r.host?.demon ?? "cinder-wraith"} size={52} />
                 <div className="room-main">
                   <div className="room-top">

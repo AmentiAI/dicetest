@@ -21,13 +21,20 @@ export function DiceFace({
   const pips = value && value >= 1 && value <= 6 ? PIPS[value] : [];
   return (
     <div className={`die-wrap ${highlight ? "is-you" : ""}`}>
-      <div className={`die ${rolling ? "is-rolling" : ""}`}>
+      <div className={`die ${rolling ? "is-rolling" : ""} ${value && !rolling ? "is-landed" : ""}`}>
         {rolling || !value ? (
           <span className="die-q">?</span>
         ) : (
-          <svg viewBox="0 0 100 100" className="die-face">
+          <svg viewBox="0 0 100 100" className="die-face" key={value}>
             {pips.map(([x, y], i) => (
-              <circle key={i} cx={x} cy={y} r="8" fill="currentColor" />
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r="8"
+                fill="currentColor"
+                style={{ animationDelay: `${i * 0.05}s` }}
+              />
             ))}
           </svg>
         )}

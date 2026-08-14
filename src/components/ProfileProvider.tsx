@@ -1,6 +1,5 @@
 "use client";
 
-import { Buffer } from "buffer";
 import {
   createContext,
   useCallback,
@@ -11,7 +10,9 @@ import {
 } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { identityMessage } from "@/lib/auth";
+import { bytesToBase64 } from "@/lib/base64";
 import { DEMONS, type DemonId } from "@/lib/demons";
+import { getJson, postJson } from "@/lib/http";
 
 export type Profile = {
   wallet: string;
@@ -41,9 +42,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/profile?wallet=${publicKey.toBase58()}`);
-      const json = await res.json();
-      setProfile(json.profile ?? null);
+      const json = await getJson<{ profile: Profile | null }>(
+        `/api/profile?wallet=${publicKey.toBase58()}`,
+      );
+      setProfile(json?.profile ?? null);
     } finally {
       setLoading(false);
     }
@@ -61,14 +63,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const wallet = publicKey.toBase58();
       const message = identityMessage(wallet, username, demon);
       const sig = await signMessage(new TextEncoder().encode(message));
-      const signatureBase64 = Buffer.from(sig).toString("base64");
-      const res = await fetch("/api/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, username, demon, signatureBase64 }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "profile failed");
+      const json = await postJson<{ profile: Profile; error?: string }>(
+        "/api/profile",
+        {
+          wallet,
+          username,
+          demon,
+          signatureBase64: bytesToBase64(sig),
+        },
+      );
+      if (!json.profile) throw new Error("Profile was not saved");
       setProfile(json.profile);
     },
     [publicKey, signMessage],

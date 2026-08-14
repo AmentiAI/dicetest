@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { getJson, postJson } from "@/lib/http";
 
 type Msg = {
   id: number;
@@ -20,9 +21,8 @@ export function ChatPanel({ roomId }: { roomId: string }) {
   useEffect(() => {
     let stop = false;
     const tick = async () => {
-      const res = await fetch(`/api/rooms/${roomId}/chat`);
-      const json = await res.json();
-      if (!stop) setMessages(json.messages ?? []);
+      const json = await getJson<{ messages: Msg[] }>(`/api/rooms/${roomId}/chat`);
+      if (!stop) setMessages(json?.messages ?? []);
     };
     void tick();
     const t = setInterval(() => void tick(), 2500);
@@ -40,14 +40,12 @@ export function ChatPanel({ roomId }: { roomId: string }) {
     if (!publicKey || !text.trim()) return;
     const body = text.trim();
     setText("");
-    await fetch(`/api/rooms/${roomId}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet: publicKey.toBase58(), body }),
+    await postJson(`/api/rooms/${roomId}/chat`, {
+      wallet: publicKey.toBase58(),
+      body,
     });
-    const res = await fetch(`/api/rooms/${roomId}/chat`);
-    const json = await res.json();
-    setMessages(json.messages ?? []);
+    const json = await getJson<{ messages: Msg[] }>(`/api/rooms/${roomId}/chat`);
+    setMessages(json?.messages ?? []);
   }
 
   return (

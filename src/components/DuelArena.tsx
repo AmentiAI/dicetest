@@ -17,6 +17,7 @@ import {
   REVEAL_DELAY_SLOTS,
 } from "@/lib/solana/constants";
 import { formatSol, formatUsd, shortKey } from "@/lib/format";
+import { getJson } from "@/lib/http";
 import { explainChainError, sendIxs } from "@/lib/solana/send";
 import { DemonPortrait } from "./DemonPortrait";
 import { DiceFace } from "./DiceFace";
@@ -70,17 +71,14 @@ export function DuelArena({ pda }: { pda: string }) {
 
   const load = useCallback(async () => {
     try {
-      const [roomRes, slotRes, priceRes] = await Promise.all([
-        fetch(`/api/rooms/${pda}`),
-        fetch(`/api/slot?pda=${pda}`),
-        fetch("/api/price"),
+      const [room, slotJson, priceJson] = await Promise.all([
+        getJson<RoomPayload>(`/api/rooms/${pda}`),
+        getJson<SlotPayload>(`/api/slot?pda=${pda}`),
+        getJson<{ usd: number | null }>("/api/price"),
       ]);
-      if (roomRes.ok) setData(await roomRes.json());
-      if (slotRes.ok) setSlot(await slotRes.json());
-      if (priceRes.ok) {
-        const p = await priceRes.json();
-        setPrice(p.usd ?? null);
-      }
+      if (room) setData(room);
+      if (slotJson) setSlot(slotJson);
+      if (priceJson) setPrice(priceJson.usd ?? null);
     } catch {
       /* ignore extension-intercepted fetch */
     }
@@ -273,7 +271,7 @@ export function DuelArena({ pda }: { pda: string }) {
         </section>
 
         <section className="arena-center">
-          <div className="table">
+          <div className={`table ${locked && !settled ? "is-hot" : ""} ${settled ? "is-won" : ""}`}>
             {settled && winner ? (
               <div className="winner-banner">
                 <span className="trophy">◆</span>
@@ -321,7 +319,7 @@ export function DuelArena({ pda }: { pda: string }) {
                 highlight={isHost}
                 label={data.host?.username ?? "Host"}
               />
-              <span className="vs">VS</span>
+              <span className={`vs ${rolling || (locked && !settled) ? "is-live" : ""}`}>VS</span>
               <DiceFace
                 value={showRolls ? challengerRoll : null}
                 rolling={rolling || (locked && !hashReady && !expired) || waiting}

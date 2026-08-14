@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { createDuelIx } from "@/lib/solana/instructions";
 import { MIN_WAGER_SOL, MAX_WAGER_SOL } from "@/lib/solana/constants";
 import { explainChainError, sendIxs } from "@/lib/solana/send";
+import { postJson } from "@/lib/http";
 import { useProfile } from "./ProfileProvider";
 
 export function CreateDuel() {
@@ -51,19 +52,14 @@ export function CreateDuel() {
         wagerLamports: lamports,
       });
       const sig = await sendIxs({ connection, wallet, ixs: [ix] });
-      const res = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pda: duel.toBase58(),
-          duelId: duelId.toString(),
-          hostWallet: wallet.publicKey.toBase58(),
-          wagerLamports: lamports.toString(),
-          createSignature: sig,
-        }),
+      const json = await postJson<{ room?: { id: string } }>("/api/rooms", {
+        pda: duel.toBase58(),
+        duelId: duelId.toString(),
+        hostWallet: wallet.publicKey.toBase58(),
+        wagerLamports: lamports.toString(),
+        createSignature: sig,
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Room record failed");
+      if (!json.room) throw new Error("Room record failed");
       router.push(`/duel/${duel.toBase58()}`);
     } catch (e) {
       setError(explainChainError(e));

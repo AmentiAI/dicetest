@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatSol, shortKey } from "@/lib/format";
+import { getJson } from "@/lib/http";
 import { DemonPortrait } from "./DemonPortrait";
 
 type Leader = {
@@ -19,9 +20,8 @@ export function Leaderboard() {
   useEffect(() => {
     let stop = false;
     const tick = async () => {
-      const res = await fetch("/api/leaderboard");
-      const json = await res.json();
-      if (!stop) setLeaders(json.leaders ?? []);
+      const json = await getJson<{ leaders: Leader[] }>("/api/leaderboard");
+      if (!stop) setLeaders(json?.leaders ?? []);
     };
     void tick();
     const t = setInterval(() => void tick(), 8000);

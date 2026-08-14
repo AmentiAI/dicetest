@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatSol, shortKey } from "@/lib/format";
+import { getJson } from "@/lib/http";
 import { explorerTx } from "@/lib/solana/constants";
 import { Leaderboard } from "@/components/Leaderboard";
 
@@ -25,9 +26,9 @@ export default function HistoryPage() {
   const [rooms, setRooms] = useState<RoomRow[]>([]);
 
   useEffect(() => {
-    fetch("/api/rooms")
-      .then((r) => r.json())
-      .then((j) => setRooms(j.rooms ?? []));
+    void getJson<{ rooms: RoomRow[] }>("/api/rooms").then((j) =>
+      setRooms(j?.rooms ?? []),
+    );
   }, []);
 
   const settled = rooms.filter((r) => r.status === "settled");
