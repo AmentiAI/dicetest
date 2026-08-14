@@ -35,6 +35,7 @@ export function LandingPage() {
   return (
     <div className="landing">
       <section className="hero">
+        <HeroDice />
         <div className="hero-copy">
           <h1 className="hero-title">
             {"BLOCK DICE".split("").map((ch, i) => (
@@ -43,9 +44,6 @@ export function LandingPage() {
               </span>
             ))}
           </h1>
-          <p className="tagline">
-            STREET DICE. ON-CHAIN PROOF. NO HIDDEN ROLLS.
-          </p>
           <p className="lede">
             Enter the circle, lock a 1v1 SOL wager, and verify every result
             through a future Solana slot hash. Winner takes the full pot. No
@@ -80,7 +78,6 @@ export function LandingPage() {
             </div>
           </div>
         </div>
-        <HeroDice />
       </section>
 
       <section className="feature-grid">
@@ -109,39 +106,58 @@ export function LandingPage() {
   );
 }
 
+function Pips({ n }: { n: number }) {
+  return (
+    <div className="pips">
+      {(PIP_CELLS[n] ?? []).map((area) => (
+        <i key={area} style={{ gridArea: area }} />
+      ))}
+    </div>
+  );
+}
+
+const PIP_CELLS: Record<number, string[]> = {
+  1: ["2 / 2"],
+  2: ["1 / 1", "3 / 3"],
+  3: ["1 / 1", "2 / 2", "3 / 3"],
+  4: ["1 / 1", "1 / 3", "3 / 1", "3 / 3"],
+  5: ["1 / 1", "1 / 3", "2 / 2", "3 / 1", "3 / 3"],
+  6: ["1 / 1", "1 / 3", "2 / 1", "2 / 3", "3 / 1", "3 / 3"],
+};
+
+function CubeDie({ tone }: { tone: "black" | "red" }) {
+  return (
+    <div className={`cube-scene ${tone}`}>
+      <div className="cube">
+        <div className="cube-face front">
+          <Pips n={1} />
+        </div>
+        <div className="cube-face back">
+          <Pips n={6} />
+        </div>
+        <div className="cube-face right">
+          <Pips n={3} />
+        </div>
+        <div className="cube-face left">
+          <Pips n={4} />
+        </div>
+        <div className="cube-face top">
+          <Pips n={2} />
+        </div>
+        <div className="cube-face bottom">
+          <Pips n={5} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HeroDice() {
-  const [left, setLeft] = useState(5);
-  const [right, setRight] = useState(2);
-  const [flip, setFlip] = useState(false);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setLeft(1 + Math.floor(Math.random() * 6));
-      setRight(1 + Math.floor(Math.random() * 6));
-      setFlip((v) => !v);
-    }, 1600);
-    return () => clearInterval(t);
-  }, []);
-
   return (
     <div className="hero-art" aria-hidden>
-      <div className="orbit orbit-a">
-        <span>HASH · SLOT</span>
-        <span>NO HOUSE</span>
-      </div>
-      <div className="orbit orbit-b">
-        <span>BLOCK</span>
-        <span>1V1 POT</span>
-      </div>
-      <div className="hero-burst" />
-      <div className={`glow-dice ${flip ? "is-flip" : ""}`}>
-        <div className="gd gd-left">
-          <span key={left}>{left}</span>
-        </div>
-        <div className="vs-flash">VS</div>
-        <div className="gd gd-right">
-          <span key={right}>{right}</span>
-        </div>
+      <div className="glow-dice">
+        <CubeDie tone="black" />
+        <CubeDie tone="red" />
       </div>
     </div>
   );

@@ -52,10 +52,10 @@ export function DemonPortrait({
       className={`demon ${selected ? "is-selected" : ""}`}
       aria-hidden
     >
-      <rect width="32" height="32" fill="#0c0d12" />
+      <rect width="32" height="32" fill="#0a0a0a" />
       <path d={p.body} fill="currentColor" opacity="0.9" />
-      <path d={p.eye} fill="#fff4d6" />
-      <path d={p.mark} stroke="#1a1208" strokeWidth="2" />
+      <path d={p.eye} fill="#ff3b3b" />
+      <path d={p.mark} stroke="#1a0000" strokeWidth="2" />
     </svg>
   );
 }

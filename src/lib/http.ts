@@ -22,10 +22,7 @@ export async function getJson<T>(url: string): Promise<T | null> {
   }
 }
 
-export async function postJson<T extends { error?: string }>(
-  url: string,
-  body: unknown,
-): Promise<T> {
+export async function postJson<T>(url: string, body: unknown): Promise<T> {
   const send = () =>
     fetch(url, {
       method: "POST",
@@ -47,9 +44,9 @@ export async function postJson<T extends { error?: string }>(
   if (!text.trim()) {
     throw new Error("Empty response from server. Try binding again.");
   }
-  let json: T;
+  let json: T & { error?: string };
   try {
-    json = JSON.parse(text) as T;
+    json = JSON.parse(text) as T & { error?: string };
   } catch {
     throw new Error("Server returned invalid JSON");
   }
