@@ -7,12 +7,23 @@ import { serverConnection } from "./solana/connection";
 import { statusName } from "./solana/pda";
 import { hashToHex } from "./solana/dice";
 
-export async function syncRoomFromChain(pda: string) {
-  const connection = serverConnection();
-  const onchain = await fetchDuel(connection, new PublicKey(pda));
+export async function syncRoomFromChain(pda: string, opts?: { force?: boolean }) {
   const existing = await db().query.rooms.findFirst({
     where: eq(rooms.id, pda),
   });
+  const skipChain =
+    !opts?.force &&
+    existing &&
+    (existing.status === "settled" ||
+      existing.status === "cancelled" ||
+      existing.status === "refunded" ||
+      existing.status === "waiting");
+  if (skipChain) {
+    return { room: existing, onchain: null };
+  }
+
+  const connection = serverConnection();
+  const onchain = await fetchDuel(connection, new PublicKey(pda));
   if (!onchain) {
     if (existing && existing.status === "waiting") {
       await db()

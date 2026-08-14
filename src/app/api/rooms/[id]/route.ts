@@ -107,7 +107,9 @@ export async function POST(req: Request, ctx: Ctx) {
         .set({ settleSignature: String(body.settleSignature), updatedAt: new Date() })
         .where(eq(rooms.id, id));
     }
-    const synced = await syncRoomFromChain(id);
+    const { invalidateDuel } = await import("@/lib/solana/fetch");
+    invalidateDuel(id);
+    const synced = await syncRoomFromChain(id, { force: true });
     return NextResponse.json({ room: synced.room });
   } catch (e) {
     const message = e instanceof Error ? e.message : "room update failed";

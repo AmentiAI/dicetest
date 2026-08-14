@@ -1,3 +1,4 @@
+import type { Connection, PublicKey } from "@solana/web3.js";
 import { count, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -7,6 +8,17 @@ export const runtime = "nodejs";
 
 const SLOT_HASHES = "SysvarS1otHashes111111111111111111111111111";
 const FALLBACK_PROGRAM_ID = "Djg4PX3upqax7GWrxWUjF3ydhbDDPqugM5QTsoNu14xx";
+
+let deployedAt = 0;
+let deployed = false;
+
+async function programDeployedCached(connection: Connection, programId: PublicKey) {
+  if (Date.now() - deployedAt < 30_000) return deployed;
+  const info = await connection.getAccountInfo(programId, "confirmed");
+  deployed = Boolean(info?.executable);
+  deployedAt = Date.now();
+  return deployed;
+}
 
 export async function GET() {
   try {
@@ -31,14 +43,11 @@ export async function GET() {
     try {
       const { serverConnection } = await import("@/lib/solana/connection");
       const { PROGRAM_ID } = await import("@/lib/solana/constants");
+      const { currentSlot } = await import("@/lib/solana/fetch");
       const connection = serverConnection();
-      rpc = connection.rpcEndpoint;
-      const [nextSlot, programInfo] = await Promise.all([
-        connection.getSlot("confirmed"),
-        connection.getAccountInfo(PROGRAM_ID, "confirmed"),
-      ]);
-      slot = nextSlot;
-      programDeployed = Boolean(programInfo?.executable);
+      rpc = connection.rpcEndpoint.replace(/api-key=[^&]+/i, "api-key=…");
+      slot = await currentSlot(connection);
+      programDeployed = await programDeployedCached(connection, PROGRAM_ID);
     } catch {
       // RPC / web3.js must not take down the whole stats payload.
     }

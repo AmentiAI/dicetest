@@ -8,9 +8,15 @@ import {
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import { PROGRAM_ID } from "./constants";
 
+let programLiveAt = 0;
+let programLive = false;
+
 export async function assertProgramLive(connection: Connection) {
+  if (programLive && Date.now() - programLiveAt < 60_000) return;
   const info = await connection.getAccountInfo(PROGRAM_ID, "confirmed");
-  if (!info?.executable) {
+  programLive = Boolean(info?.executable);
+  programLiveAt = Date.now();
+  if (!programLive) {
     throw new Error(
       "On-chain program is not deployed on this cluster yet. Escrow cannot land until you `anchor deploy` with program/keys/dice_duel-keypair.json — see README.",
     );

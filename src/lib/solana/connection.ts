@@ -1,17 +1,25 @@
 import { Connection } from "@solana/web3.js";
-import { SOLANA_RPC } from "./constants";
+import { resolveBrowserRpc, resolveServerRpc, rpcFetch } from "./rpc";
 
-export function makeConnection(rpcUrl = SOLANA_RPC) {
-  return new Connection(rpcUrl, {
-    commitment: "confirmed",
-    confirmTransactionInitialTimeout: 60_000,
-  });
+const connConfig = {
+  commitment: "confirmed" as const,
+  confirmTransactionInitialTimeout: 60_000,
+  fetch: rpcFetch,
+  disableRetryOnRateLimit: false,
+};
+
+export function makeConnection(rpcUrl = resolveBrowserRpc()) {
+  return new Connection(rpcUrl, connConfig);
 }
 
+let cached: Connection | null = null;
+let cachedUrl = "";
+
 export function serverConnection() {
-  const url =
-    process.env.SOLANA_RPC_URL ||
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-    "https://api.devnet.solana.com";
-  return new Connection(url, "confirmed");
+  const url = resolveServerRpc();
+  if (!cached || cachedUrl !== url) {
+    cached = new Connection(url, connConfig);
+    cachedUrl = url;
+  }
+  return cached;
 }

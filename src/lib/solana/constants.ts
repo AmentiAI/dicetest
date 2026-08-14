@@ -1,4 +1,5 @@
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { resolveBrowserRpc } from "./rpc";
 
 const FALLBACK_PROGRAM_ID = "Djg4PX3upqax7GWrxWUjF3ydhbDDPqugM5QTsoNu14xx";
 
@@ -17,13 +18,7 @@ export const SOLANA_NETWORK =
   (process.env.NEXT_PUBLIC_SOLANA_NETWORK as "devnet" | "mainnet-beta" | "testnet") ||
   "devnet";
 
-export const SOLANA_RPC =
-  process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-  (SOLANA_NETWORK === "mainnet-beta"
-    ? "https://api.mainnet-beta.solana.com"
-    : SOLANA_NETWORK === "testnet"
-      ? "https://api.testnet.solana.com"
-      : "https://api.devnet.solana.com");
+export const SOLANA_RPC = resolveBrowserRpc();
 
 export const EXPLORER_CLUSTER =
   SOLANA_NETWORK === "mainnet-beta" ? "" : `?cluster=${SOLANA_NETWORK}`;

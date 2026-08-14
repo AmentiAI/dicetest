@@ -11,6 +11,7 @@ import { ProfileProvider, useProfile } from "./ProfileProvider";
 import { formatUsd } from "@/lib/format";
 import { getJson } from "@/lib/http";
 import { SOLANA_NETWORK } from "@/lib/solana/constants";
+import { isAdminWallet } from "@/lib/admin";
 
 const LINKS = [
   { href: "/circles", label: "Play" },
@@ -56,7 +57,7 @@ function Header() {
       }
     };
     void tick();
-    const t = setInterval(() => void tick(), 10000);
+    const t = setInterval(() => void tick(), 30_000);
     return () => {
       stop = true;
       clearInterval(t);
@@ -85,6 +86,15 @@ function Header() {
             {l.label}
           </Link>
         ))}
+        {isAdminWallet(publicKey?.toBase58()) ? (
+          <Link
+            href="/admin"
+            className={pathname.startsWith("/admin") ? "on" : ""}
+            onClick={() => setOpen(false)}
+          >
+            Admin
+          </Link>
+        ) : null}
       </nav>
 
       <div className="top-actions">
@@ -126,9 +136,12 @@ function Header() {
 }
 
 function ShellInner({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const { publicKey } = useWallet();
   const { profile } = useProfile();
-  const needIdentity = Boolean(publicKey && !profile);
+  const needIdentity = Boolean(
+    publicKey && !profile && !pathname.startsWith("/admin"),
+  );
 
   return (
     <div className="app-frame">

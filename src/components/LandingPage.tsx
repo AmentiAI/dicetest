@@ -24,7 +24,7 @@ export function LandingPage() {
       if (!stop && json) setStats(json);
     };
     void tick();
-    const t = setInterval(() => void tick(), 8000);
+    const t = setInterval(() => void tick(), 15_000);
     return () => {
       stop = true;
       clearInterval(t);

@@ -42,7 +42,7 @@ export function RoomBrowser() {
       setStats(statsRes);
     };
     void tick();
-    const t = setInterval(() => void tick(), 4000);
+    const t = setInterval(() => void tick(), 8_000);
     return () => {
       stop = true;
       clearInterval(t);

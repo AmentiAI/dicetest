@@ -1242,6 +1242,111 @@ code {
   transform: translateY(-1px);
 }
 
+.admin-gate {
+  max-width: 520px;
+  padding: 48px 8px 80px;
+}
+.admin-gate h1 {
+  margin: 0 0 10px;
+  font-family: var(--font-display), sans-serif;
+  font-size: 42px;
+}
+.admin-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.admin-kpi {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+}
+.admin-kpi span {
+  display: block;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mist);
+  margin-bottom: 6px;
+}
+.admin-kpi b {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.admin-toolbar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.admin-tabs,
+.admin-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.admin-search {
+  flex: 1;
+  min-width: 220px;
+  background: #0a0a0a;
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 10px 12px;
+  outline: none;
+}
+.admin-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.admin-table th {
+  text-align: left;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mist);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.admin-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.admin-table tbody tr:hover {
+  background: #161616;
+}
+.admin-table .mono,
+.mono {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+}
+.badge.create,
+.badge.created {
+  color: var(--mist);
+}
+.badge.join {
+  color: var(--warn);
+}
+.badge.settle,
+.badge.settled {
+  color: var(--gold);
+}
+.badge.rematch {
+  color: var(--ember-2);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1275,6 +1380,9 @@ code {
     height: 16px;
   }
   .hero-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+  .admin-kpis {
     grid-template-columns: 1fr 1fr;
   }
   .topnav {

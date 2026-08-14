@@ -86,25 +86,40 @@ export function DuelArena({ pda }: { pda: string }) {
   const [payoutFailed, setPayoutFailed] = useState(false);
   const autoSettleKey = useRef<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (withPrice = false) => {
     try {
-      const [room, slotJson, priceJson] = await Promise.all([
-        getJson<RoomPayload>(`/api/rooms/${pda}`),
-        getJson<SlotPayload>(`/api/slot?pda=${pda}`),
-        getJson<{ usd: number | null }>("/api/price"),
-      ]);
+      const room = await getJson<RoomPayload>(`/api/rooms/${pda}`);
       if (room) setData(room);
-      if (slotJson) setSlot(slotJson);
-      if (priceJson) setPrice(priceJson.usd ?? null);
+      const status = room?.room?.status;
+      if (status === "locked") {
+        const slotJson = await getJson<SlotPayload>(`/api/slot?pda=${pda}`);
+        if (slotJson) setSlot(slotJson);
+      }
+      if (withPrice) {
+        const priceJson = await getJson<{ usd: number | null }>("/api/price");
+        if (priceJson) setPrice(priceJson.usd ?? null);
+      }
+      return status ?? null;
     } catch {
-      /* ignore extension-intercepted fetch */
+      return null;
     }
   }, [pda]);
 
   useEffect(() => {
-    void load();
-    const t = setInterval(() => void load(), 2000);
-    return () => clearInterval(t);
+    let stop = false;
+    let timer = 0;
+    const tick = async (withPrice: boolean) => {
+      const status = await load(withPrice);
+      if (stop) return;
+      const ms =
+        status === "locked" ? 3_500 : status === "waiting" ? 5_000 : 8_000;
+      timer = window.setTimeout(() => void tick(false), ms);
+    };
+    void tick(true);
+    return () => {
+      stop = true;
+      window.clearTimeout(timer);
+    };
   }, [load]);
 
   const me = publicKey?.toBase58();
