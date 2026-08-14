@@ -55,8 +55,9 @@ export async function POST(req: Request) {
     const hostWallet = String((body as { hostWallet?: unknown }).hostWallet ?? "");
     const wagerLamports = String((body as { wagerLamports?: unknown }).wagerLamports ?? "");
     const createSignature = String(
-      (body as { createSignature?: unknown }).createSignature ?? "",
-    );
+    (body as { createSignature?: unknown }).createSignature ?? "",
+  );
+  const rematchOf = String((body as { rematchOf?: unknown }).rematchOf ?? "");
 
   if (!pda || !duelId || !hostWallet || !wagerLamports || !createSignature) {
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
@@ -104,8 +105,36 @@ export async function POST(req: Request) {
     wallet: "system",
     username: "SYS",
     kind: "system",
-                body: "Circle opened. Wager is locked in the program PDA. Winner takes all.",
+    body: rematchOf
+      ? "Rematch circle. Wager is locked in the PDA. Winner takes all."
+      : "Circle opened. Wager is locked in the program PDA. Winner takes all.",
   });
+
+  if (rematchOf) {
+    const prior = await db().query.rooms.findFirst({ where: eq(rooms.id, rematchOf) });
+    const allowed =
+      prior &&
+      (prior.hostWallet === hostWallet || prior.challengerWallet === hostWallet);
+    if (allowed) {
+      await db().insert(matchEvents).values({
+        roomId: rematchOf,
+        event: "rematch",
+        payload: {
+          rematchPda: pda,
+          hostWallet,
+          duelId,
+          wagerLamports: onchain.wagerLamports.toString(),
+        },
+      });
+      await db().insert(chatMessages).values({
+        roomId: rematchOf,
+        wallet: "system",
+        username: "SYS",
+        kind: "system",
+        body: "Rematch opened. Join from this circle or set a different wager.",
+      });
+    }
+  }
 
   const room = await db().query.rooms.findFirst({ where: eq(rooms.id, pda) });
   return NextResponse.json({ room });

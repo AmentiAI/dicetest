@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
   cancelIx,
+  createDuelIx,
   joinDuelIx,
   refundExpiredIx,
   settleIx,
@@ -14,10 +16,12 @@ import {
   explorerAccount,
   explorerSlot,
   explorerTx,
+  MAX_WAGER_SOL,
+  MIN_WAGER_SOL,
   REVEAL_DELAY_SLOTS,
 } from "@/lib/solana/constants";
-import { formatSol, formatUsd, shortKey } from "@/lib/format";
-import { getJson } from "@/lib/http";
+import { formatSol, formatUsd, shortKey, solToLamports } from "@/lib/format";
+import { getJson, postJson } from "@/lib/http";
 import { explainChainError, sendIxs } from "@/lib/solana/send";
 import { DemonPortrait } from "./DemonPortrait";
 import { DiceFace } from "./DiceFace";
@@ -44,6 +48,13 @@ type RoomPayload = {
   };
   host: { username: string; demon: string; wins: number; losses: number } | null;
   challenger: { username: string; demon: string; wins: number; losses: number } | null;
+  rematch?: {
+    pda: string;
+    hostWallet: string;
+    duelId: string;
+    wagerLamports: string;
+    status: string;
+  } | null;
 };
 
 type SlotPayload = {
@@ -62,12 +73,14 @@ export function DuelArena({ pda }: { pda: string }) {
   const { publicKey } = wallet;
   const { connection } = useConnection();
   const { profile } = useProfile();
+  const router = useRouter();
   const [data, setData] = useState<RoomPayload | null>(null);
   const [slot, setSlot] = useState<SlotPayload | null>(null);
   const [price, setPrice] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [rolling, setRolling] = useState(false);
+  const [rematchOpen, setRematchOpen] = useState(false);
+  const [rematchWager, setRematchWager] = useState("0.05");
 
   const load = useCallback(async () => {
     try {
@@ -96,8 +109,8 @@ export function DuelArena({ pda }: { pda: string }) {
   const isChallenger = Boolean(me && room && me === room.challengerWallet);
   const inDuel = isHost || isChallenger;
 
-  const hostRoll = room?.hostRoll || slot?.preview?.hostRoll || null;
-  const challengerRoll = room?.challengerRoll || slot?.preview?.challengerRoll || null;
+  const hostRoll = room?.hostRoll ?? slot?.preview?.hostRoll ?? null;
+  const challengerRoll = room?.challengerRoll ?? slot?.preview?.challengerRoll ?? null;
   const hashReady = Boolean(slot?.hashReady);
   const expired = Boolean(slot?.expired);
   const settled = room?.status === "settled";
@@ -150,7 +163,6 @@ export function DuelArena({ pda }: { pda: string }) {
 
   async function settle() {
     if (!publicKey || !room?.challengerWallet) return;
-    setRolling(true);
     await sendIx(
       settleIx({
         settler: publicKey,
@@ -160,7 +172,6 @@ export function DuelArena({ pda }: { pda: string }) {
       }),
       { settle: "1" },
     );
-    setRolling(false);
   }
 
   async function cancel() {
@@ -182,6 +193,81 @@ export function DuelArena({ pda }: { pda: string }) {
     );
   }
 
+  async function rematch() {
+    if (!publicKey || !room) return;
+    if (!profile) {
+      setError("Bind your identity first");
+      return;
+    }
+    const n = Number(rematchWager);
+    if (!Number.isFinite(n) || n < MIN_WAGER_SOL || n > MAX_WAGER_SOL) {
+      setError(`Wager must be ${MIN_WAGER_SOL}–${MAX_WAGER_SOL} SOL`);
+      return;
+    }
+    const lamports = solToLamports(n);
+    setBusy(true);
+    setError(null);
+    try {
+      const duelId =
+        BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
+      const { duel, ix } = createDuelIx({
+        host: publicKey,
+        duelId,
+        wagerLamports: lamports,
+      });
+      const sig = await sendIxs({ connection, wallet, ixs: [ix] });
+      const json = await postJson<{ room?: { id: string } }>("/api/rooms", {
+        pda: duel.toBase58(),
+        duelId: duelId.toString(),
+        hostWallet: publicKey.toBase58(),
+        wagerLamports: lamports.toString(),
+        createSignature: sig,
+        rematchOf: room.id,
+      });
+      if (!json.room) throw new Error("Rematch record failed");
+      setRematchOpen(false);
+      router.push(`/duel/${duel.toBase58()}`);
+    } catch (e) {
+      setError(explainChainError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function joinRematch() {
+    if (!publicKey || !data?.rematch) return;
+    const next = data.rematch;
+    setBusy(true);
+    setError(null);
+    try {
+      const sig = await sendIxs({
+        connection,
+        wallet,
+        ixs: [
+          joinDuelIx({
+            challenger: publicKey,
+            host: new PublicKey(next.hostWallet),
+            duelId: BigInt(next.duelId),
+          }),
+        ],
+      });
+      try {
+        await fetch(`/api/rooms/${next.pda}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ joinSignature: sig }),
+        });
+      } catch {
+        /* chain join already landed */
+      }
+      router.push(`/duel/${next.pda}`);
+    } catch (e) {
+      setError(explainChainError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!room || !data) {
     return <div className="empty">Loading duel from Neon + chain…</div>;
   }
@@ -191,8 +277,20 @@ export function DuelArena({ pda }: { pda: string }) {
   const winner = room.winnerWallet;
   const youWon = winner && me === winner;
   const showRolls = settled || (hashReady && hostRoll && challengerRoll);
+  const rematchOffer = data.rematch ?? null;
+  const canRematch =
+    inDuel && Boolean(publicKey && profile) && (settled || room.status === "refunded");
+  const lastWagerSol = solInputFromLamports(room.wagerLamports);
+  const rematchChips = [...new Set([lastWagerSol, "0.01", "0.05", "0.1", "0.25", "1"])];
+
+  function openRematch() {
+    setError(null);
+    setRematchWager(lastWagerSol);
+    setRematchOpen(true);
+  }
 
   return (
+    <>
     <div className="arena">
       <header className="arena-head">
         <Link href="/circles" className="back">
@@ -314,15 +412,17 @@ export function DuelArena({ pda }: { pda: string }) {
 
             <div className="dice-row">
               <DiceFace
+                tone="black"
                 value={showRolls ? hostRoll : null}
-                rolling={rolling || (locked && !hashReady && !expired)}
+                rolling={locked && !expired && !showRolls}
                 highlight={isHost}
                 label={data.host?.username ?? "Host"}
               />
-              <span className={`vs ${rolling || (locked && !settled) ? "is-live" : ""}`}>VS</span>
+              <span className={`vs ${locked && !settled ? "is-live" : ""}`}>VS</span>
               <DiceFace
+                tone="red"
                 value={showRolls ? challengerRoll : null}
-                rolling={rolling || (locked && !hashReady && !expired) || waiting}
+                rolling={(locked && !expired && !showRolls) || waiting}
                 highlight={isChallenger}
                 label={data.challenger?.username ?? "Open seat"}
               />
@@ -357,6 +457,26 @@ export function DuelArena({ pda }: { pda: string }) {
                   Refund both
                 </button>
               ) : null}
+              {canRematch && rematchOffer && rematchOffer.hostWallet === me ? (
+                <Link href={`/duel/${rematchOffer.pda}`} className="btn-ember">
+                  Go to rematch
+                </Link>
+              ) : null}
+              {canRematch && rematchOffer && rematchOffer.hostWallet !== me ? (
+                <button className="btn-ember" disabled={busy} onClick={() => void joinRematch()}>
+                  {busy ? "Joining…" : `Join rematch · ${formatSol(rematchOffer.wagerLamports)}`}
+                </button>
+              ) : null}
+              {canRematch && rematchOffer && rematchOffer.hostWallet !== me ? (
+                <button className="btn-ghost" disabled={busy} onClick={openRematch}>
+                  Different wager
+                </button>
+              ) : null}
+              {canRematch && !rematchOffer ? (
+                <button className="btn-ember" disabled={busy} onClick={openRematch}>
+                  Rematch
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -376,7 +496,60 @@ export function DuelArena({ pda }: { pda: string }) {
         <ChatPanel roomId={pda} />
       </div>
     </div>
+    {rematchOpen ? (
+      <div className="overlay" onClick={() => !busy && setRematchOpen(false)}>
+        <div className="panel create-panel" onClick={(e) => e.stopPropagation()}>
+          <p className="kicker">Rematch</p>
+          <h2>Set the wager</h2>
+          <p className="muted">
+            Last round was {formatSol(room.wagerLamports)}. Keep it or lock a
+            different amount. Opponent matches whatever you set.
+          </p>
+          <label className="field">
+            <span>Wager (SOL)</span>
+            <input
+              type="number"
+              min={MIN_WAGER_SOL}
+              max={MAX_WAGER_SOL}
+              step="0.001"
+              value={rematchWager}
+              onChange={(e) => setRematchWager(e.target.value)}
+            />
+          </label>
+          <div className="chip-row">
+            {rematchChips.map((v) => (
+              <button
+                key={v}
+                type="button"
+                className={`chip${v === rematchWager ? " is-on" : ""}`}
+                onClick={() => setRematchWager(v)}
+              >
+                {v} SOL{v === lastWagerSol ? " · last" : ""}
+              </button>
+            ))}
+          </div>
+          {error ? <p className="err">{error}</p> : null}
+          <div className="row-actions">
+            <button className="btn-ghost" disabled={busy} onClick={() => setRematchOpen(false)}>
+              Back
+            </button>
+            <button className="btn-ember" disabled={busy} onClick={() => void rematch()}>
+              {busy ? "Opening…" : `Lock ${rematchWager || "—"} SOL`}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
+}
+
+}
+
+function solInputFromLamports(lamports: string) {
+  const n = Number(lamports) / 1e9;
+  if (!Number.isFinite(n) || n <= 0) return "0.05";
+  return n.toFixed(6).replace(/\.?0+$/, "");
 }
 
 function TxLink({ label, sig }: { label: string; sig: string | null }) {

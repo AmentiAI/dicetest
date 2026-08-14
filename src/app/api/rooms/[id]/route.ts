@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { profiles, rooms } from "@/lib/db/schema";
+import { matchEvents, profiles, rooms } from "@/lib/db/schema";
 
 export const runtime = "nodejs";
 
@@ -24,10 +24,40 @@ export async function GET(_req: Request, ctx: Ctx) {
           where: eq(profiles.wallet, room.challengerWallet),
         })
       : null;
+
+    let rematch: {
+      pda: string;
+      hostWallet: string;
+      duelId: string;
+      wagerLamports: string;
+      status: string;
+    } | null = null;
+    const [ev] = await db()
+      .select()
+      .from(matchEvents)
+      .where(and(eq(matchEvents.roomId, id), eq(matchEvents.event, "rematch")))
+      .orderBy(desc(matchEvents.id))
+      .limit(1);
+    const rematchPda =
+      ev?.payload && typeof ev.payload.rematchPda === "string" ? ev.payload.rematchPda : null;
+    if (rematchPda) {
+      const next = await db().query.rooms.findFirst({ where: eq(rooms.id, rematchPda) });
+      if (next && next.status === "waiting") {
+        rematch = {
+          pda: next.id,
+          hostWallet: next.hostWallet,
+          duelId: next.duelId,
+          wagerLamports: next.wagerLamports,
+          status: next.status,
+        };
+      }
+    }
+
     return NextResponse.json({
       room,
       host: host ?? null,
       challenger: challenger ?? null,
+      rematch,
       onchain: onchain
         ? {
             status: onchain.status,

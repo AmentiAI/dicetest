@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { CubeDie } from "@/components/CubeDie";
 import { getJson } from "@/lib/http";
 import { SOLANA_NETWORK } from "@/lib/solana/constants";
 
@@ -106,58 +107,12 @@ export function LandingPage() {
   );
 }
 
-function Pips({ n }: { n: number }) {
-  return (
-    <div className="pips">
-      {(PIP_CELLS[n] ?? []).map((area) => (
-        <i key={area} style={{ gridArea: area }} />
-      ))}
-    </div>
-  );
-}
-
-const PIP_CELLS: Record<number, string[]> = {
-  1: ["2 / 2"],
-  2: ["1 / 1", "3 / 3"],
-  3: ["1 / 1", "2 / 2", "3 / 3"],
-  4: ["1 / 1", "1 / 3", "3 / 1", "3 / 3"],
-  5: ["1 / 1", "1 / 3", "2 / 2", "3 / 1", "3 / 3"],
-  6: ["1 / 1", "1 / 3", "2 / 1", "2 / 3", "3 / 1", "3 / 3"],
-};
-
-function CubeDie({ tone }: { tone: "black" | "red" }) {
-  return (
-    <div className={`cube-scene ${tone}`}>
-      <div className="cube">
-        <div className="cube-face front">
-          <Pips n={1} />
-        </div>
-        <div className="cube-face back">
-          <Pips n={6} />
-        </div>
-        <div className="cube-face right">
-          <Pips n={3} />
-        </div>
-        <div className="cube-face left">
-          <Pips n={4} />
-        </div>
-        <div className="cube-face top">
-          <Pips n={2} />
-        </div>
-        <div className="cube-face bottom">
-          <Pips n={5} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function HeroDice() {
   return (
     <div className="hero-art" aria-hidden>
       <div className="glow-dice">
-        <CubeDie tone="black" />
-        <CubeDie tone="red" />
+        <CubeDie tone="black" orbit />
+        <CubeDie tone="red" orbit />
       </div>
     </div>
   );
