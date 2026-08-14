@@ -63,17 +63,28 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const wallet = publicKey.toBase58();
       const message = identityMessage(wallet, username, demon);
       const sig = await signMessage(new TextEncoder().encode(message));
-      const json = await postJson<{ profile: Profile; error?: string }>(
-        "/api/profile",
-        {
-          wallet,
-          username,
-          demon,
-          signatureBase64: bytesToBase64(sig),
-        },
-      );
-      if (!json.profile) throw new Error("Profile was not saved");
-      setProfile(json.profile);
+      try {
+        const json = await postJson<{ profile: Profile; error?: string }>(
+          "/api/profile",
+          {
+            wallet,
+            username,
+            demon,
+            signatureBase64: bytesToBase64(new Uint8Array(sig)),
+          },
+        );
+        if (!json.profile) throw new Error("Profile was not saved");
+        setProfile(json.profile);
+      } catch (e) {
+        const json = await getJson<{ profile: Profile | null }>(
+          `/api/profile?wallet=${wallet}`,
+        );
+        if (json?.profile) {
+          setProfile(json.profile);
+          return;
+        }
+        throw e;
+      }
     },
     [publicKey, signMessage],
   );
