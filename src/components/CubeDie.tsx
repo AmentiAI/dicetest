@@ -44,11 +44,13 @@ export function CubeDie({
   value = null,
   rolling = false,
   orbit = false,
+  slow = false,
 }: {
   tone: "black" | "red";
   value?: number | null;
   rolling?: boolean;
   orbit?: boolean;
+  slow?: boolean;
 }) {
   const cubeRef = useRef<HTMLDivElement>(null);
   const angles = useRef({ x: tone === "red" ? -28 : -22, y: tone === "red" ? -38 : 32 });
@@ -93,8 +95,12 @@ export function CubeDie({
       const t0 = performance.now();
       const x0 = angles.current.x;
       const y0 = angles.current.y;
-      const speedX = tone === "red" ? 0.68 : 0.9;
-      const speedY = tone === "red" ? 1.18 : 1.05;
+      const speedX = slow
+        ? tone === "red" ? 0.018 : 0.022
+        : tone === "red" ? 0.22 : 0.28;
+      const speedY = slow
+        ? tone === "red" ? 0.026 : 0.02
+        : tone === "red" ? 0.34 : 0.3;
       const tick = (now: number) => {
         const dt = now - t0;
         const x = x0 + dt * speedX;
@@ -111,7 +117,7 @@ export function CubeDie({
     angles.current = idle;
     el.style.transition = "transform 0.7s ease";
     el.style.transform = `rotateX(${idle.x}deg) rotateY(${idle.y}deg)`;
-  }, [orbit, rolling, tone, value]);
+  }, [orbit, rolling, slow, tone, value]);
 
   return (
     <div className={`cube-scene ${tone}${orbit ? " is-orbit" : ""}`}>

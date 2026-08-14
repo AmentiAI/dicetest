@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
@@ -81,6 +81,10 @@ export function DuelArena({ pda }: { pda: string }) {
   const [error, setError] = useState<string | null>(null);
   const [rematchOpen, setRematchOpen] = useState(false);
   const [rematchWager, setRematchWager] = useState("0.05");
+  const [revealed, setRevealed] = useState(false);
+  const [announced, setAnnounced] = useState(false);
+  const [payoutFailed, setPayoutFailed] = useState(false);
+  const autoSettleKey = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -116,6 +120,55 @@ export function DuelArena({ pda }: { pda: string }) {
   const settled = room?.status === "settled";
   const waiting = room?.status === "waiting";
   const locked = room?.status === "locked";
+  const previewWinner =
+    hostRoll && challengerRoll && room && hostRoll !== challengerRoll
+      ? hostRoll > challengerRoll
+        ? room.hostWallet
+        : room.challengerWallet
+      : null;
+  const showRolls = settled || revealed;
+
+  useEffect(() => {
+    if (settled || (room?.hostRoll && room?.challengerRoll)) {
+      setRevealed(true);
+      return;
+    }
+    if (hashReady && hostRoll && challengerRoll) {
+      const t = window.setTimeout(() => setRevealed(true), 800);
+      return () => window.clearTimeout(t);
+    }
+    setRevealed(false);
+  }, [settled, hashReady, hostRoll, challengerRoll, room?.hostRoll, room?.challengerRoll]);
+
+  useEffect(() => {
+    if (settled) {
+      setAnnounced(true);
+      setRevealed(true);
+      setPayoutFailed(false);
+      setError(null);
+      return;
+    }
+    if (revealed && hostRoll && challengerRoll) {
+      const t = window.setTimeout(() => setAnnounced(true), 1650);
+      return () => window.clearTimeout(t);
+    }
+    setAnnounced(false);
+  }, [settled, revealed, hostRoll, challengerRoll]);
+
+  useEffect(() => {
+    if (!announced || !locked || !hashReady || settled || expired) return;
+    if (!inDuel || !publicKey || !room?.challengerWallet) return;
+    const key = `${pda}:${room.duelId}`;
+    if (autoSettleKey.current === key) return;
+    autoSettleKey.current = key;
+    setPayoutFailed(false);
+    void (async () => {
+      const sig = await settle();
+      if (!sig) setPayoutFailed(true);
+    })();
+    // settle reads latest room/wallet from this render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [announced, locked, hashReady, settled, expired, inDuel, publicKey, room?.challengerWallet, room?.duelId, pda]);
 
   const slotsLeft = useMemo(() => {
     if (!slot?.slot || !room?.revealSlot) return null;
@@ -163,7 +216,7 @@ export function DuelArena({ pda }: { pda: string }) {
 
   async function settle() {
     if (!publicKey || !room?.challengerWallet) return;
-    await sendIx(
+    return sendIx(
       settleIx({
         settler: publicKey,
         host: new PublicKey(room.hostWallet),
@@ -172,6 +225,15 @@ export function DuelArena({ pda }: { pda: string }) {
       }),
       { settle: "1" },
     );
+  }
+
+  async function retryPayout() {
+    autoSettleKey.current = null;
+    setPayoutFailed(false);
+    setError(null);
+    const sig = await settle();
+    if (!sig) setPayoutFailed(true);
+    else autoSettleKey.current = `${pda}:${room?.duelId ?? ""}`;
   }
 
   async function cancel() {
@@ -274,9 +336,10 @@ export function DuelArena({ pda }: { pda: string }) {
 
   const wagerSol = Number(room.wagerLamports) / 1e9;
   const pot = BigInt(room.wagerLamports) * 2n;
-  const winner = room.winnerWallet;
+  const winner = room.winnerWallet ?? previewWinner;
   const youWon = winner && me === winner;
-  const showRolls = settled || (hashReady && hostRoll && challengerRoll);
+  const payingOut = locked && announced && !settled && !expired && !payoutFailed && inDuel;
+  const proofHash = room.slotHash || slot?.preview?.slotHash || null;
   const rematchOffer = data.rematch ?? null;
   const canRematch =
     inDuel && Boolean(publicKey && profile) && (settled || room.status === "refunded");
@@ -301,7 +364,8 @@ export function DuelArena({ pda }: { pda: string }) {
           <p className="status-line">
             {waiting && "WAITING FOR CHALLENGER"}
             {locked && !hashReady && !expired && "HASH LOCKED — WAITING ON SLOT"}
-            {locked && hashReady && !settled && "SLOT HASH READY — SETTLE TO PAY"}
+            {locked && hashReady && !announced && !expired && "ROLLING FROM SLOT HASH"}
+            {payingOut && "PAYING THE WINNER"}
             {expired && !settled && "HASH EXPIRED — REFUND BOTH"}
             {settled && "SETTLED · WINNER TAKES ALL"}
             {room.status === "cancelled" && "CANCELLED"}
@@ -317,7 +381,7 @@ export function DuelArena({ pda }: { pda: string }) {
             title="Host"
             profile={data.host}
             wallet={room.hostWallet}
-            roll={showRolls ? hostRoll : null}
+            roll={announced ? hostRoll : null}
             wins={data.host?.wins ?? 0}
             you={isHost}
             winner={winner === room.hostWallet}
@@ -326,7 +390,7 @@ export function DuelArena({ pda }: { pda: string }) {
             title="Challenger"
             profile={data.challenger}
             wallet={room.challengerWallet}
-            roll={showRolls ? challengerRoll : null}
+            roll={announced ? challengerRoll : null}
             wins={data.challenger?.wins ?? 0}
             you={isChallenger}
             winner={Boolean(winner && winner === room.challengerWallet)}
@@ -363,23 +427,32 @@ export function DuelArena({ pda }: { pda: string }) {
               <li>Host locks SOL in the duel PDA.</li>
               <li>Challenger matches the wager. Join commits a future slot.</li>
               <li>Dice = SHA-256 of that slot hash + PDA + both wallets.</li>
-              <li>Higher roll takes the full pot. Ties re-hash. No rake.</li>
+              <li>Higher roll takes the full pot. Ties re-hash. Payout is automatic. No rake.</li>
             </ol>
           </div>
         </section>
 
         <section className="arena-center">
-          <div className={`table ${locked && !settled ? "is-hot" : ""} ${settled ? "is-won" : ""}`}>
-            {settled && winner ? (
+          <div className={`table ${locked && !settled ? "is-hot" : ""} ${announced && winner ? "is-won" : ""}`}>
+            {announced && winner ? (
               <div className="winner-banner">
                 <span className="trophy">◆</span>
-                <h2>{youWon ? "You take the pot" : "Round winner"}</h2>
+                <h2>
+                  {youWon
+                    ? settled
+                      ? "You take the pot"
+                      : "You win"
+                    : "Round winner"}
+                </h2>
                 <p>
                   {winner === room.hostWallet
                     ? data.host?.username ?? shortKey(winner)
                     : data.challenger?.username ?? shortKey(winner)}{" "}
                   · {formatSol(pot.toString())}
                 </p>
+                {payingOut ? (
+                  <p className="muted">Sending the pot on-chain…</p>
+                ) : null}
               </div>
             ) : locked && !hashReady && !expired ? (
               <div className="wait-copy">
@@ -401,12 +474,10 @@ export function DuelArena({ pda }: { pda: string }) {
                 <h2>Waiting for a challenger</h2>
                 <p className="muted">Match the wager to lock the hash window.</p>
               </div>
-            ) : hashReady && !settled ? (
+            ) : hashReady && !announced ? (
               <div className="wait-copy">
-                <h2>Hash is in the sysvar</h2>
-                <p className="muted">
-                  Outcome is determined. Settle pays the winner on-chain.
-                </p>
+                <h2>Hash landed</h2>
+                <p className="muted">Dice are rolling from the slot hash.</p>
               </div>
             ) : null}
 
@@ -414,7 +485,8 @@ export function DuelArena({ pda }: { pda: string }) {
               <DiceFace
                 tone="black"
                 value={showRolls ? hostRoll : null}
-                rolling={locked && !expired && !showRolls}
+                rolling={!showRolls && (waiting || (locked && !expired))}
+                slow={waiting || (locked && !hashReady)}
                 highlight={isHost}
                 label={data.host?.username ?? "Host"}
               />
@@ -422,17 +494,58 @@ export function DuelArena({ pda }: { pda: string }) {
               <DiceFace
                 tone="red"
                 value={showRolls ? challengerRoll : null}
-                rolling={(locked && !expired && !showRolls) || waiting}
+                rolling={!showRolls && (waiting || (locked && !expired))}
+                slow={waiting || (locked && !hashReady)}
                 highlight={isChallenger}
                 label={data.challenger?.username ?? "Open seat"}
               />
             </div>
 
-            {(room.slotHash || slot?.preview?.slotHash) && (
-              <p className="hash-line">
-                slot hash {room.slotHash || slot?.preview?.slotHash}
-              </p>
-            )}
+            {announced && (proofHash || hostRoll) ? (
+              <div className="proof-box">
+                <p className="kicker">Proof</p>
+                <dl>
+                  <div>
+                    <dt>Host roll</dt>
+                    <dd>{hostRoll ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Challenger roll</dt>
+                    <dd>{challengerRoll ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Reveal slot</dt>
+                    <dd>
+                      {room.revealSlot ? (
+                        <a href={explorerSlot(room.revealSlot)} target="_blank" rel="noreferrer">
+                          {room.revealSlot}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Slot hash</dt>
+                    <dd className="proof-hash">{proofHash ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Settle tx</dt>
+                    <dd>
+                      {room.settleSignature ? (
+                        <a href={explorerTx(room.settleSignature)} target="_blank" rel="noreferrer">
+                          {shortKey(room.settleSignature, 6, 4)}
+                        </a>
+                      ) : payingOut ? (
+                        "sending…"
+                      ) : (
+                        "pending"
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ) : null}
 
             {error ? <p className="err">{error}</p> : null}
 
@@ -447,9 +560,9 @@ export function DuelArena({ pda }: { pda: string }) {
                   Cancel & refund
                 </button>
               ) : null}
-              {locked && hashReady && !settled ? (
-                <button className="btn-ember" disabled={busy} onClick={() => void settle()}>
-                  {busy ? "Settling…" : "Settle on-chain"}
+              {payoutFailed && inDuel && !settled && announced ? (
+                <button className="btn-ghost" disabled={busy} onClick={() => void retryPayout()}>
+                  Retry payout
                 </button>
               ) : null}
               {expired && !settled && room.challengerWallet ? (

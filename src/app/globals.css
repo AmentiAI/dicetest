@@ -1017,6 +1017,41 @@ code {
   max-width: 520px;
   text-align: center;
 }
+.proof-box {
+  width: min(100%, 440px);
+  border: 1px solid var(--line);
+  background: #0a0a0a;
+  padding: 12px 14px;
+  text-align: left;
+}
+.proof-box dl {
+  margin: 0;
+}
+.proof-box dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.proof-box dl div:last-child {
+  border-bottom: 0;
+}
+.proof-box dt {
+  color: var(--mist);
+  flex-shrink: 0;
+}
+.proof-box dd {
+  margin: 0;
+  text-align: right;
+}
+.proof-hash {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  word-break: break-all;
+  max-width: 240px;
+}
 .winner-banner {
   text-align: center;
   animation: pop-in 0.55s cubic-bezier(0.16, 1.4, 0.3, 1) both;
