@@ -1,0 +1,28 @@
+[package]
+name = "dice_duel"
+version = "0.1.0"
+description = "1v1 SOL dice. Slot hash rolls. Winner takes all. No house fee."
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "dice_duel"
+
+[features]
+default = ["idl-build"]
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "=0.31.1"
+solana-program = "=2.1.21"
+blake3 = "=1.5.5"
+hashbrown = "=0.15.2"
+proc-macro-crate = "=3.2.0"
+toml_edit = "=0.22.22"
+indexmap = "=2.7.1"
+zeroize = "=1.8.1"
+unicode-segmentation = "=1.12.0"
