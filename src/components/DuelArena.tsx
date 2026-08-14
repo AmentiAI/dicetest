@@ -544,8 +544,6 @@ export function DuelArena({ pda }: { pda: string }) {
   );
 }
 
-}
-
 function solInputFromLamports(lamports: string) {
   const n = Number(lamports) / 1e9;
   if (!Number.isFinite(n) || n <= 0) return "0.05";

@@ -695,17 +695,11 @@ code {
   border-color: var(--ember);
   color: #fff;
 }
-.chip.is-on {
+.chip.is-on,
+.chip.on {
   border-color: var(--ember);
   color: #fff;
   background: #1a0505;
-}
-  color: var(--text);
-}
-.chip.on {
-  color: var(--text);
-  border-color: var(--ember);
-  box-shadow: 0 0 12px rgba(225, 6, 0, 0.25);
 }
 
 .room-list,
