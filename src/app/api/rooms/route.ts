@@ -1,12 +1,9 @@
 import { desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { PublicKey } from "@solana/web3.js";
 import { db } from "@/lib/db";
 import { chatMessages, matchEvents, profiles, rooms } from "@/lib/db/schema";
-import { fetchDuel } from "@/lib/solana/fetch";
-import { serverConnection } from "@/lib/solana/connection";
-import { PROGRAM_ID } from "@/lib/solana/constants";
-import { statusName } from "@/lib/solana/pda";
+
+export const runtime = "nodejs";
 
 async function withProfiles<T extends { hostWallet: string; challengerWallet: string | null }>(
   list: T[],
@@ -28,18 +25,23 @@ async function withProfiles<T extends { hostWallet: string; challengerWallet: st
 }
 
 export async function GET() {
-  const list = await db().select().from(rooms).orderBy(desc(rooms.createdAt)).limit(80);
-  const enriched = await withProfiles(list);
-  const waiting = list.filter((r) => r.status === "waiting").length;
-  const locked = list.filter((r) => r.status === "locked").length;
-  return NextResponse.json({
-    rooms: enriched,
-    stats: {
-      activeRooms: waiting + locked,
-      waiting,
-      locked,
-    },
-  });
+  try {
+    const list = await db().select().from(rooms).orderBy(desc(rooms.createdAt)).limit(80);
+    const enriched = await withProfiles(list);
+    const waiting = list.filter((r) => r.status === "waiting").length;
+    const locked = list.filter((r) => r.status === "locked").length;
+    return NextResponse.json({
+      rooms: enriched,
+      stats: {
+        activeRooms: waiting + locked,
+        waiting,
+        locked,
+      },
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "rooms lookup failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -60,6 +62,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
   }
 
+  const { PublicKey } = await import("@solana/web3.js");
+  const { fetchDuel } = await import("@/lib/solana/fetch");
+  const { serverConnection } = await import("@/lib/solana/connection");
+  const { PROGRAM_ID } = await import("@/lib/solana/constants");
+  const { statusName } = await import("@/lib/solana/pda");
   const connection = serverConnection();
   const onchain = await fetchDuel(connection, new PublicKey(pda));
   if (!onchain) {

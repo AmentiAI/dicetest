@@ -1,5 +1,5 @@
 import nacl from "tweetnacl";
-import { PublicKey } from "@solana/web3.js";
+import bs58 from "bs58";
 import { base64ToBytes } from "./base64";
 
 export function identityMessage(wallet: string, username: string, demon: string) {
@@ -12,7 +12,8 @@ export function verifyWalletSignature(args: {
   signatureBase64: string;
 }) {
   try {
-    const pubkey = new PublicKey(args.wallet).toBytes();
+    const pubkey = bs58.decode(args.wallet);
+    if (pubkey.length !== 32) return false;
     const message = new TextEncoder().encode(args.message);
     const signature = base64ToBytes(args.signatureBase64);
     if (signature.length !== 64) return false;

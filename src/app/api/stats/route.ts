@@ -1,41 +1,62 @@
 import { count, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { Connection, SYSVAR_SLOT_HASHES_PUBKEY } from "@solana/web3.js";
 import { db } from "@/lib/db";
 import { profiles, rooms } from "@/lib/db/schema";
-import { serverConnection } from "@/lib/solana/connection";
-import { PROGRAM_ID } from "@/lib/solana/constants";
-
-export async function GET() {
-  const connection = serverConnection();
-  const [slot, programInfo, waiting, locked, settled, players] = await Promise.all([
-    connection.getSlot("confirmed"),
-    connection.getAccountInfo(PROGRAM_ID, "confirmed"),
-    db().select({ n: count() }).from(rooms).where(eq(rooms.status, "waiting")),
-    db().select({ n: count() }).from(rooms).where(eq(rooms.status, "locked")),
-    db().select({ n: count() }).from(rooms).where(eq(rooms.status, "settled")),
-    db().select({ n: count() }).from(profiles),
-  ]);
-
-  const potRows = await db()
-    .select({
-      pot: sql<string>`coalesce(sum(${rooms.wagerLamports}::numeric * 2), 0)::text`,
-    })
-    .from(rooms)
-    .where(eq(rooms.status, "locked"));
-
-  return NextResponse.json({
-    slot,
-    programId: PROGRAM_ID.toBase58(),
-    programDeployed: Boolean(programInfo?.executable),
-    slotHashes: SYSVAR_SLOT_HASHES_PUBKEY.toBase58(),
-    waiting: waiting[0]?.n ?? 0,
-    locked: locked[0]?.n ?? 0,
-    settled: settled[0]?.n ?? 0,
-    players: players[0]?.n ?? 0,
-    lockedPotLamports: potRows[0]?.pot ?? "0",
-    rpc: (connection as Connection).rpcEndpoint,
-  });
-}
 
 export const runtime = "nodejs";
+
+const SLOT_HASHES = "SysvarS1otHashes111111111111111111111111111";
+const FALLBACK_PROGRAM_ID = "Djg4PX3upqax7GWrxWUjF3ydhbDDPqugM5QTsoNu14xx";
+
+export async function GET() {
+  try {
+    const [waiting, locked, settled, players, potRows] = await Promise.all([
+      db().select({ n: count() }).from(rooms).where(eq(rooms.status, "waiting")),
+      db().select({ n: count() }).from(rooms).where(eq(rooms.status, "locked")),
+      db().select({ n: count() }).from(rooms).where(eq(rooms.status, "settled")),
+      db().select({ n: count() }).from(profiles),
+      db()
+        .select({
+          pot: sql<string>`coalesce(sum(${rooms.wagerLamports}::numeric * 2), 0)::text`,
+        })
+        .from(rooms)
+        .where(eq(rooms.status, "locked")),
+    ]);
+
+    const programId = process.env.NEXT_PUBLIC_PROGRAM_ID || FALLBACK_PROGRAM_ID;
+    let slot: number | null = null;
+    let programDeployed = false;
+    let rpc: string | null = null;
+
+    try {
+      const { serverConnection } = await import("@/lib/solana/connection");
+      const { PROGRAM_ID } = await import("@/lib/solana/constants");
+      const connection = serverConnection();
+      rpc = connection.rpcEndpoint;
+      const [nextSlot, programInfo] = await Promise.all([
+        connection.getSlot("confirmed"),
+        connection.getAccountInfo(PROGRAM_ID, "confirmed"),
+      ]);
+      slot = nextSlot;
+      programDeployed = Boolean(programInfo?.executable);
+    } catch {
+      // RPC / web3.js must not take down the whole stats payload.
+    }
+
+    return NextResponse.json({
+      slot,
+      programId,
+      programDeployed,
+      slotHashes: SLOT_HASHES,
+      waiting: waiting[0]?.n ?? 0,
+      locked: locked[0]?.n ?? 0,
+      settled: settled[0]?.n ?? 0,
+      players: players[0]?.n ?? 0,
+      lockedPotLamports: potRows[0]?.pot ?? "0",
+      rpc,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "stats failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

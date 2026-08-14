@@ -1,8 +1,17 @@
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 
-export const PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_PROGRAM_ID || "Djg4PX3upqax7GWrxWUjF3ydhbDDPqugM5QTsoNu14xx",
-);
+const FALLBACK_PROGRAM_ID = "Djg4PX3upqax7GWrxWUjF3ydhbDDPqugM5QTsoNu14xx";
+
+function parseProgramId() {
+  const raw = process.env.NEXT_PUBLIC_PROGRAM_ID || FALLBACK_PROGRAM_ID;
+  try {
+    return new PublicKey(raw);
+  } catch {
+    return new PublicKey(FALLBACK_PROGRAM_ID);
+  }
+}
+
+export const PROGRAM_ID = parseProgramId();
 
 export const SOLANA_NETWORK =
   (process.env.NEXT_PUBLIC_SOLANA_NETWORK as "devnet" | "mainnet-beta" | "testnet") ||
