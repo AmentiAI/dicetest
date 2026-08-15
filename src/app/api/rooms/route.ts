@@ -24,9 +24,21 @@ async function withProfiles<T extends { hostWallet: string; challengerWallet: st
   }));
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const list = await db().select().from(rooms).orderBy(desc(rooms.createdAt)).limit(80);
+    const url = new URL(req.url);
+    const status = url.searchParams.get("status");
+    const rawLimit = Number(url.searchParams.get("limit") ?? 80);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 250) : 80;
+
+    const list = status
+      ? await db()
+          .select()
+          .from(rooms)
+          .where(eq(rooms.status, status))
+          .orderBy(desc(rooms.createdAt))
+          .limit(limit)
+      : await db().select().from(rooms).orderBy(desc(rooms.createdAt)).limit(limit);
     const enriched = await withProfiles(list);
     const waiting = list.filter((r) => r.status === "waiting").length;
     const locked = list.filter((r) => r.status === "locked").length;

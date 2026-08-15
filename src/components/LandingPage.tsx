@@ -111,8 +111,9 @@ function HeroDice() {
   return (
     <div className="hero-art" aria-hidden>
       <div className="glow-dice">
-        <CubeDie tone="black" orbit />
-        <CubeDie tone="red" orbit />
+        <CubeDie tone="ice" orbit />
+        <CubeDie tone="chain" orbit />
+        <CubeDie tone="burn" orbit />
       </div>
     </div>
   );

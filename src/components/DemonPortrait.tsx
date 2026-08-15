@@ -1,4 +1,4 @@
-import type { DemonId } from "@/lib/demons";
+import { getDemon, type DemonId } from "@/lib/demons";
 
 const PATHS: Record<DemonId, { body: string; eye: string; mark: string }> = {
   "cinder-wraith": {
@@ -42,6 +42,7 @@ export function DemonPortrait({
   size?: number;
   selected?: boolean;
 }) {
+  const demon = getDemon(id);
   const key = (id in PATHS ? id : "cinder-wraith") as DemonId;
   const p = PATHS[key];
   return (
@@ -51,11 +52,12 @@ export function DemonPortrait({
       viewBox="0 0 32 32"
       className={`demon ${selected ? "is-selected" : ""}`}
       aria-hidden
+      style={{ color: demon.accent }}
     >
-      <rect width="32" height="32" fill="#0a0a0a" />
-      <path d={p.body} fill="currentColor" opacity="0.9" />
-      <path d={p.eye} fill="#ff3b3b" />
-      <path d={p.mark} stroke="#1a0000" strokeWidth="2" />
+      <rect width="32" height="32" fill="#070b12" />
+      <path d={p.body} fill="currentColor" opacity="0.88" />
+      <path d={p.eye} fill="#eef4ff" />
+      <path d={p.mark} stroke="#05060b" strokeWidth="2" />
     </svg>
   );
 }

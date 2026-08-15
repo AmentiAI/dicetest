@@ -42,7 +42,7 @@ export function IdentityModal() {
             onChange={(e) => setUsername(e.target.value)}
           />
         </label>
-        <p className="field-label">Select your shade</p>
+        <p className="field-label">Choose your set</p>
         <div className="demon-row">
           {DEMONS.map((d) => (
             <button

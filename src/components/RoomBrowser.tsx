@@ -7,6 +7,7 @@ import { getJson } from "@/lib/http";
 import { CreateDuel } from "./CreateDuel";
 import { DemonPortrait } from "./DemonPortrait";
 import { useProfile } from "./ProfileProvider";
+import { arenaFor } from "@/lib/cosmetics";
 
 type RoomRow = {
   id: string;
@@ -127,7 +128,8 @@ export function RoomBrowser() {
                     <span className={`badge ${r.status}`}>{r.status}</span>
                   </div>
                   <p className="muted">
-                    {shortKey(r.hostWallet)} · 1 / 2 · PDA {shortKey(r.id, 6, 4)}
+                    {arenaFor(r.id).name} · {shortKey(r.hostWallet)} · PDA{" "}
+                    {shortKey(r.id, 6, 4)}
                   </p>
                 </div>
                 <div className="room-wager">

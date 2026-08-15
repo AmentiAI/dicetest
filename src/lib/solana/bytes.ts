@@ -26,6 +26,16 @@ export function toHex(bytes: Uint8Array) {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+export function fromHex(hex: string): Uint8Array {
+  const s = hex.startsWith("0x") ? hex.slice(2) : hex.trim();
+  if (s.length % 2 !== 0) throw new Error("odd hex");
+  const out = new Uint8Array(s.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = Number.parseInt(s.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
 export function asBytes(data: Uint8Array | ArrayBuffer | number[]): Uint8Array {
   return data instanceof Uint8Array ? data : new Uint8Array(data);
 }

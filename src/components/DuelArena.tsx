@@ -25,8 +25,10 @@ import { getJson, postJson } from "@/lib/http";
 import { explainChainError, sendIxs } from "@/lib/solana/send";
 import { DemonPortrait } from "./DemonPortrait";
 import { DiceFace } from "./DiceFace";
+import { EmoteHolo } from "./EmoteHolo";
 import { ChatPanel } from "./ChatPanel";
 import { useProfile } from "./ProfileProvider";
+import { arenaFor, resultEmote, skinForDemon } from "@/lib/cosmetics";
 
 type RoomPayload = {
   room: {
@@ -360,6 +362,12 @@ export function DuelArena({ pda }: { pda: string }) {
     inDuel && Boolean(publicKey && profile) && (settled || room.status === "refunded");
   const lastWagerSol = solInputFromLamports(room.wagerLamports);
   const rematchChips = [...new Set([lastWagerSol, "0.01", "0.05", "0.1", "0.25", "1"])];
+  const arena = arenaFor(room.id);
+  const emote = resultEmote({
+    youWon: Boolean(youWon),
+    inDuel,
+    waiting,
+  });
 
   function openRematch() {
     setError(null);
@@ -448,9 +456,14 @@ export function DuelArena({ pda }: { pda: string }) {
         </section>
 
         <section className="arena-center">
-          <div className={`table ${locked && !settled ? "is-hot" : ""} ${announced && winner ? "is-won" : ""}`}>
+          <div className={`table env-${arena.id} ${locked && !settled ? "is-hot" : ""} ${announced && winner ? "is-won" : ""}`}>
+            <p className="arena-tag">{arena.name}</p>
+            <div className="hash-pad" aria-hidden>
+              <span>S</span>
+            </div>
             {announced && winner ? (
               <div className="winner-banner">
+                <EmoteHolo id={emote.id} label={emote.label} />
                 <span className="trophy">◆</span>
                 <h2>
                   {youWon
@@ -471,6 +484,7 @@ export function DuelArena({ pda }: { pda: string }) {
               </div>
             ) : locked && !hashReady && !expired ? (
               <div className="wait-copy">
+                <EmoteHolo id="locked-in" label="Locked In" />
                 <p className="kicker">Reveal in</p>
                 <h2>{slotsLeft ?? REVEAL_DELAY_SLOTS} slots</h2>
                 <p className="muted">
@@ -486,11 +500,13 @@ export function DuelArena({ pda }: { pda: string }) {
               </div>
             ) : waiting ? (
               <div className="wait-copy">
+                <EmoteHolo id="locked-in" label="Locked In" />
                 <h2>Waiting for a challenger</h2>
                 <p className="muted">Match the wager to lock the hash window.</p>
               </div>
             ) : hashReady && !announced ? (
               <div className="wait-copy">
+                <EmoteHolo id="fist-bump" label="Electric Fist Bump" />
                 <h2>Hash landed</h2>
                 <p className="muted">Dice are rolling from the slot hash.</p>
               </div>
@@ -498,19 +514,23 @@ export function DuelArena({ pda }: { pda: string }) {
 
             <div className="dice-row">
               <DiceFace
-                tone="black"
+                tone={skinForDemon(data.host?.demon)}
                 value={showRolls ? hostRoll : null}
                 rolling={!showRolls && (waiting || (locked && !expired))}
                 slow={waiting || (locked && !hashReady)}
+                trail={!showRolls && (waiting || (locked && !expired))}
+                crater={Boolean(showRolls && hostRoll)}
                 highlight={isHost}
                 label={data.host?.username ?? "Host"}
               />
               <span className={`vs ${locked && !settled ? "is-live" : ""}`}>VS</span>
               <DiceFace
-                tone="red"
+                tone={data.challenger ? skinForDemon(data.challenger.demon) : "chain"}
                 value={showRolls ? challengerRoll : null}
                 rolling={!showRolls && (waiting || (locked && !expired))}
                 slow={waiting || (locked && !hashReady)}
+                trail={!showRolls && (waiting || (locked && !expired))}
+                crater={Boolean(showRolls && challengerRoll)}
                 highlight={isChallenger}
                 label={data.challenger?.username ?? "Open seat"}
               />
