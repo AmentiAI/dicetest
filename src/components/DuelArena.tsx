@@ -16,6 +16,7 @@ import {
   explorerAccount,
   explorerSlot,
   explorerTx,
+  DUEL_STATUS,
   MAX_WAGER_SOL,
   MIN_WAGER_SOL,
   REVEAL_DELAY_SLOTS,
@@ -23,6 +24,7 @@ import {
 import { formatSol, formatUsd, shortKey, solToLamports } from "@/lib/format";
 import { getJson, postJson } from "@/lib/http";
 import { explainChainError, sendIxs } from "@/lib/solana/send";
+import { fetchDuel, invalidateDuel } from "@/lib/solana/fetch";
 import { DemonPortrait } from "./DemonPortrait";
 import { DiceFace } from "./DiceFace";
 import { EmoteHolo } from "./EmoteHolo";
@@ -70,6 +72,8 @@ type SlotPayload = {
   challengerRoll?: number | null;
 };
 
+const autoSettled = new Set<string>();
+
 export function DuelArena({ pda }: { pda: string }) {
   const wallet = useWallet();
   const { publicKey } = wallet;
@@ -86,7 +90,6 @@ export function DuelArena({ pda }: { pda: string }) {
   const [revealed, setRevealed] = useState(false);
   const [announced, setAnnounced] = useState(false);
   const [payoutFailed, setPayoutFailed] = useState(false);
-  const autoSettleKey = useRef<string | null>(null);
 
   const load = useCallback(async (withPrice = false) => {
     try {
@@ -176,13 +179,25 @@ export function DuelArena({ pda }: { pda: string }) {
     if (!announced || !locked || !hashReady || settled || expired) return;
     if (!inDuel || !publicKey || !room?.challengerWallet) return;
     const key = `${pda}:${room.duelId}`;
-    if (autoSettleKey.current === key) return;
-    autoSettleKey.current = key;
-    setPayoutFailed(false);
-    void (async () => {
-      const sig = await settle();
-      if (!sig) setPayoutFailed(true);
-    })();
+    if (autoSettled.has(key)) return;
+    const wait = publicKey.toBase58() === room.hostWallet ? 400 : 2200;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled || autoSettled.has(key)) return;
+      autoSettled.add(key);
+      setPayoutFailed(false);
+      void (async () => {
+        const sig = await settle();
+        if (!sig) {
+          autoSettled.delete(key);
+          setPayoutFailed(true);
+        }
+      })();
+    }, wait);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
     // settle reads latest room/wallet from this render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [announced, locked, hashReady, settled, expired, inDuel, publicKey, room?.challengerWallet, room?.duelId, pda]);
@@ -233,7 +248,22 @@ export function DuelArena({ pda }: { pda: string }) {
 
   async function settle() {
     if (!publicKey || !room?.challengerWallet) return;
-    return sendIx(
+    invalidateDuel(pda);
+    const onchain = await fetchDuel(connection, new PublicKey(pda));
+    if (onchain && onchain.status === DUEL_STATUS.Settled) {
+      await fetch(`/api/rooms/${pda}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      await load();
+      return room.settleSignature || "settled";
+    }
+    if (!onchain || onchain.status !== DUEL_STATUS.Locked) {
+      await load();
+      return;
+    }
+    const sig = await sendIx(
       settleIx({
         settler: publicKey,
         host: new PublicKey(room.hostWallet),
@@ -242,15 +272,28 @@ export function DuelArena({ pda }: { pda: string }) {
       }),
       { settle: "1" },
     );
+    if (sig) return sig;
+    invalidateDuel(pda);
+    const again = await fetchDuel(connection, new PublicKey(pda));
+    if (again && again.status === DUEL_STATUS.Settled) {
+      setError(null);
+      await fetch(`/api/rooms/${pda}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      await load();
+      return "settled";
+    }
   }
 
   async function retryPayout() {
-    autoSettleKey.current = null;
+    autoSettled.delete(`${pda}:${room?.duelId ?? ""}`);
     setPayoutFailed(false);
     setError(null);
     const sig = await settle();
     if (!sig) setPayoutFailed(true);
-    else autoSettleKey.current = `${pda}:${room?.duelId ?? ""}`;
+    else autoSettled.add(`${pda}:${room?.duelId ?? ""}`);
   }
 
   async function cancel() {

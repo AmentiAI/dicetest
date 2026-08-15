@@ -324,7 +324,7 @@ a:hover {
   width: var(--cube);
   height: var(--cube);
   transform-style: preserve-3d;
-  transform: rotateX(-26deg) rotateY(34deg);
+  transform: rotateX(-32deg) rotateY(28deg);
 }
 .cube {
   width: var(--cube);

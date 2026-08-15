@@ -46,6 +46,9 @@ export function explainChainError(e: unknown): string {
   if (/user rejected|rejected the request|cancelled|denied/i.test(parts)) {
     return "Wallet rejected the transaction.";
   }
+  if (/NotLocked|0x1774|custom program error: 6004/i.test(parts)) {
+    return "This duel was already settled.";
+  }
   if (/0x1\b/.test(parts) || /insufficient/i.test(parts)) {
     return "Not enough SOL for the wager plus fees. Airdrop on devnet if needed.";
   }

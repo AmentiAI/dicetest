@@ -12,13 +12,15 @@ const PIP_CELLS: Record<number, string[]> = {
   6: ["1 / 1", "1 / 3", "2 / 1", "2 / 3", "3 / 1", "3 / 3"],
 };
 
+// Cube local faces: 1 front, 2 top, 3 right, 4 left, 5 bottom, 6 back.
+// Targets put the rolled number on +Y (the top of the die on the table).
 const FACE_ROT: Record<number, [number, number]> = {
-  1: [0, 0],
-  2: [-90, 0],
-  3: [0, -90],
-  4: [0, 90],
-  5: [90, 0],
-  6: [0, 180],
+  1: [-90, 0],
+  2: [0, 0],
+  3: [-90, -90],
+  4: [-90, 90],
+  5: [180, 0],
+  6: [90, 0],
 };
 
 function continueTo(prev: number, target: number, extraTurns: number) {
