@@ -50,8 +50,8 @@ function proofCheck(r: RoomRow): "ok" | "fail" | "incomplete" {
       duel: new PublicKey(r.id),
       host: new PublicKey(r.hostWallet),
       challenger: new PublicKey(r.challengerWallet),
-      wagerLamports: r.wagerLamports,
-      revealSlot: r.revealSlot,
+      wagerLamports: BigInt(r.wagerLamports),
+      revealSlot: BigInt(r.revealSlot),
     });
     return derived.hostRoll === r.hostRoll && derived.challengerRoll === r.challengerRoll
       ? "ok"
