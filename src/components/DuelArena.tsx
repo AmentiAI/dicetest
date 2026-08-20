@@ -144,8 +144,18 @@ export function DuelArena({ pda }: { pda: string }) {
   const isChallenger = Boolean(me && room && me === room.challengerWallet);
   const inDuel = isHost || isChallenger;
 
-  const hostRoll = room?.hostRoll ?? slot?.preview?.hostRoll ?? null;
-  const challengerRoll = room?.challengerRoll ?? slot?.preview?.challengerRoll ?? null;
+  const hostRoll =
+    room?.hostRoll && room.hostRoll > 0
+      ? room.hostRoll
+      : slot?.hostRoll && slot.hostRoll > 0
+        ? slot.hostRoll
+        : slot?.preview?.hostRoll ?? null;
+  const challengerRoll =
+    room?.challengerRoll && room.challengerRoll > 0
+      ? room.challengerRoll
+      : slot?.challengerRoll && slot.challengerRoll > 0
+        ? slot.challengerRoll
+        : slot?.preview?.challengerRoll ?? null;
   const hashReady = Boolean(slot?.hashReady);
   const expired = Boolean(slot?.expired);
   const settled = room?.status === "settled";

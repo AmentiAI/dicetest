@@ -13,12 +13,12 @@ const PIP_CELLS: Record<number, string[]> = {
 };
 
 const FACE_ROT: Record<number, [number, number]> = {
-  1: [-90, 0],
-  2: [0, 0],
-  3: [-90, -90],
-  4: [-90, 90],
-  5: [180, 0],
-  6: [90, 0],
+  1: [0, 0],
+  2: [-90, 0],
+  3: [0, -90],
+  4: [0, 90],
+  5: [90, 0],
+  6: [0, 180],
 };
 
 const ORBIT_PHASE: Record<string, number> = {
@@ -160,7 +160,7 @@ export function CubeDie({
         const z0 = angles.current.z;
         const x1 = continueTo(x0, tx, alt ? 2 : 2);
         const y1 = continueTo(y0, ty, alt ? 3 : 2);
-        const z1 = continueTo(z0, 0, 1);
+        const z1 = continueTo(z0, 0, 0);
         const t0 = performance.now();
         const duration = slow ? 1600 : 1400;
         el.style.transition = "none";
@@ -228,6 +228,7 @@ export function CubeDie({
         orbit ? "is-orbit" : "",
         rolling && !value ? "is-tumbling" : "",
         rolling && slow ? "slow-tumble" : "",
+        value != null && value >= 1 && value <= 6 ? "has-value" : "",
         settled ? "is-settled" : "",
       ]
         .filter(Boolean)

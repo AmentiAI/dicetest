@@ -297,6 +297,10 @@ a:hover {
   transform-style: preserve-3d;
   transform: rotateX(-32deg) rotateY(28deg);
 }
+.cube-scene.has-value .cube-cam {
+  transform: rotateX(-12deg) rotateY(16deg);
+  transition: transform 0.35s ease;
+}
 .cube {
   width: var(--cube);
   height: var(--cube);
