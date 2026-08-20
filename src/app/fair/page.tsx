@@ -2,8 +2,8 @@ import { PROGRAM_ID } from "@/lib/solana/constants";
 
 export default function FairPage() {
   return (
-    <div className="doc-page">
-      <p className="kicker">Proof</p>
+    <div className="dash-page doc-page">
+      <p className="dash-eyebrow">Proof</p>
       <h1>Provably fair</h1>
       <p className="muted">
         Rolls are not picked by the server. After both wagers lock, the program

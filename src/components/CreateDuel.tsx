@@ -10,14 +10,17 @@ import { MIN_WAGER_SOL, MAX_WAGER_SOL } from "@/lib/solana/constants";
 import { explainChainError, sendIxs } from "@/lib/solana/send";
 import { postJson } from "@/lib/http";
 import { useProfile } from "./ProfileProvider";
+import { ArenaPicker } from "./ArenaPicker";
+import type { ArenaId } from "@/lib/cosmetics";
 
-export function CreateDuel() {
+export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
   const wallet = useWallet();
   const { connection } = useConnection();
   const { profile } = useProfile();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [wager, setWager] = useState("0.05");
+  const [open, setOpen] = useState(Boolean(initialWager));
+  const [wager, setWager] = useState(initialWager ?? "0.05");
+  const [arena, setArena] = useState<ArenaId>("alley");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +61,7 @@ export function CreateDuel() {
         hostWallet: wallet.publicKey.toBase58(),
         wagerLamports: lamports.toString(),
         createSignature: sig,
+        arena,
       });
       if (!json.room) throw new Error("Room record failed");
       router.push(`/duel/${duel.toBase58()}`);
@@ -94,6 +98,7 @@ export function CreateDuel() {
                 onChange={(e) => setWager(e.target.value)}
               />
             </label>
+            <ArenaPicker value={arena} onChange={setArena} />
             <div className="chip-row">
               {["0.01", "0.05", "0.1", "0.25", "1"].map((v) => (
                 <button key={v} type="button" className="chip" onClick={() => setWager(v)}>

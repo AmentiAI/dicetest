@@ -22,7 +22,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BLOCK DICE — hash dice on Solana",
+  title: "Roll the Block — Solana dice",
   description:
     "1v1 SOL dice. Slot-hash proof. Winner takes all. No house fee.",
 };

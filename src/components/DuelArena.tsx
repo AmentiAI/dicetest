@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
@@ -25,12 +26,17 @@ import { formatSol, formatUsd, shortKey, solToLamports } from "@/lib/format";
 import { getJson, postJson } from "@/lib/http";
 import { explainChainError, sendIxs } from "@/lib/solana/send";
 import { fetchDuel, invalidateDuel } from "@/lib/solana/fetch";
-import { DemonPortrait } from "./DemonPortrait";
+import { ArenaTable } from "./ArenaTable";
 import { DiceFace } from "./DiceFace";
-import { EmoteHolo } from "./EmoteHolo";
+import { WalletBadge } from "./WalletBadge";
 import { ChatPanel } from "./ChatPanel";
+import { ArenaPicker } from "./ArenaPicker";
+import { SlotCountdown } from "./SlotCountdown";
+import { AnimatedNumber } from "./AnimatedNumber";
+import { GameIcon } from "./GameIcon";
 import { useProfile } from "./ProfileProvider";
-import { arenaFor, resultEmote, skinForDemon } from "@/lib/cosmetics";
+import { arenaForSeed, type Arena, type ArenaId } from "@/lib/cosmetics";
+import { stagger, motion as motionTokens } from "@/lib/motion";
 
 type RoomPayload = {
   room: {
@@ -59,6 +65,7 @@ type RoomPayload = {
     wagerLamports: string;
     status: string;
   } | null;
+  arena?: Arena;
 };
 
 type SlotPayload = {
@@ -87,6 +94,7 @@ export function DuelArena({ pda }: { pda: string }) {
   const [error, setError] = useState<string | null>(null);
   const [rematchOpen, setRematchOpen] = useState(false);
   const [rematchWager, setRematchWager] = useState("0.05");
+  const [rematchArena, setRematchArena] = useState<ArenaId>("alley");
   const [revealed, setRevealed] = useState(false);
   const [announced, setAnnounced] = useState(false);
   const [payoutFailed, setPayoutFailed] = useState(false);
@@ -154,7 +162,7 @@ export function DuelArena({ pda }: { pda: string }) {
       return;
     }
     if (hashReady && hostRoll && challengerRoll) {
-      const t = window.setTimeout(() => setRevealed(true), 800);
+      const t = window.setTimeout(() => setRevealed(true), 2000);
       return () => window.clearTimeout(t);
     }
     setRevealed(false);
@@ -345,6 +353,7 @@ export function DuelArena({ pda }: { pda: string }) {
         wagerLamports: lamports.toString(),
         createSignature: sig,
         rematchOf: room.id,
+        arena: rematchArena,
       });
       if (!json.room) throw new Error("Rematch record failed");
       setRematchOpen(false);
@@ -405,44 +414,29 @@ export function DuelArena({ pda }: { pda: string }) {
     inDuel && Boolean(publicKey && profile) && (settled || room.status === "refunded");
   const lastWagerSol = solInputFromLamports(room.wagerLamports);
   const rematchChips = [...new Set([lastWagerSol, "0.01", "0.05", "0.1", "0.25", "1"])];
-  const arena = arenaFor(room.id);
-  const emote = resultEmote({
-    youWon: Boolean(youWon),
-    inDuel,
-    waiting,
-  });
+  const arena = data?.arena ?? arenaForSeed(room?.id ?? pda);
 
   function openRematch() {
     setError(null);
     setRematchWager(lastWagerSol);
+    setRematchArena(arena.id);
     setRematchOpen(true);
   }
 
   return (
     <>
-    <div className="arena">
-      <header className="arena-head">
-        <Link href="/circles" className="back">
-          ← Leave
-        </Link>
-        <div>
-          <h1>Circle</h1>
-          <p className="status-line">
-            {waiting && "WAITING FOR CHALLENGER"}
-            {locked && !hashReady && !expired && "HASH LOCKED — WAITING ON SLOT"}
-            {locked && hashReady && !announced && !expired && "ROLLING FROM SLOT HASH"}
-            {payingOut && "PAYING THE WINNER"}
-            {expired && !settled && "HASH EXPIRED — REFUND BOTH"}
-            {settled && "SETTLED · WINNER TAKES ALL"}
-            {room.status === "cancelled" && "CANCELLED"}
-            {room.status === "refunded" && "REFUNDED"}
-          </p>
-        </div>
-        <span className={`badge ${room.status}`}>{room.status}</span>
-      </header>
-
-      <div className="arena-grid">
-        <section className="arena-side">
+    <div className="arena-v2-wrap bd-duel">
+      <div className="arena-v2-grid">
+        <aside className="arena-v2-side">
+          <Link href="/circles" className="bd-back">
+            ← Circles
+          </Link>
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={stagger.container}
+            className="arena-v2-side-stack"
+          >
           <PlayerCard
             title="Host"
             profile={data.host}
@@ -451,6 +445,8 @@ export function DuelArena({ pda }: { pda: string }) {
             wins={data.host?.wins ?? 0}
             you={isHost}
             winner={winner === room.hostWallet}
+            accent={arena.hostAccent}
+            dieTone={arena.hostSkin}
           />
           <PlayerCard
             title="Challenger"
@@ -460,9 +456,12 @@ export function DuelArena({ pda }: { pda: string }) {
             wins={data.challenger?.wins ?? 0}
             you={isChallenger}
             winner={Boolean(winner && winner === room.challengerWallet)}
+            accent={arena.guestAccent}
+            dieTone={arena.guestSkin}
+            vacant={!data.challenger}
           />
 
-          <div className="panel bet-box">
+          <motion.div className="panel bet-box arena-v2-panel" variants={stagger.item}>
             <p className="kicker">Escrow</p>
             <dl>
               <div>
@@ -471,7 +470,12 @@ export function DuelArena({ pda }: { pda: string }) {
               </div>
               <div>
                 <dt>Pot</dt>
-                <dd className="gold">{waiting ? formatSol(room.wagerLamports) : formatSol(pot.toString())}</dd>
+                <dd className="gold pot-value">
+                  <AnimatedNumber
+                    value={waiting ? Number(room.wagerLamports) / 1e9 : Number(pot) / 1e9}
+                    format={(n) => `${n.toFixed(4)} SOL`}
+                  />
+                </dd>
               </div>
               <div>
                 <dt>USD each</dt>
@@ -482,31 +486,36 @@ export function DuelArena({ pda }: { pda: string }) {
                 <dd>0%</dd>
               </div>
             </dl>
-            <a href={explorerAccount(room.id)} target="_blank" rel="noreferrer">
-              PDA {shortKey(room.id, 6, 6)}
+            <a
+              className="bd-pda"
+              href={explorerAccount(room.id)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              PDA {shortKey(room.id, 4, 4)}
             </a>
-          </div>
+          </motion.div>
+          </motion.div>
+        </aside>
 
-          <div className="panel rules">
-            <p className="kicker">Rules</p>
-            <ol>
-              <li>Host locks SOL in the duel PDA.</li>
-              <li>Challenger matches the wager. Join commits a future slot.</li>
-              <li>Dice = SHA-256 of that slot hash + PDA + both wallets.</li>
-              <li>Higher roll takes the full pot. Ties re-hash. Payout is automatic. No rake.</li>
-            </ol>
-          </div>
-        </section>
-
-        <section className="arena-center">
-          <div className={`table env-${arena.id} ${locked && !settled ? "is-hot" : ""} ${announced && winner ? "is-won" : ""}`}>
-            <p className="arena-tag">{arena.name}</p>
-            <div className="hash-pad" aria-hidden>
-              <span>S</span>
-            </div>
+        <section className="arena-v2-main">
+          <ArenaTable
+            arena={arena}
+            hot={locked && !settled}
+            won={Boolean(announced && winner)}
+            potLabel={
+              waiting
+                ? formatSol(room.wagerLamports)
+                : `${(Number(pot) / 1e9).toFixed(4)} SOL`
+            }
+          >
             {announced && winner ? (
-              <div className="winner-banner">
-                <EmoteHolo id={emote.id} label={emote.label} />
+              <motion.div
+                className="winner-banner arena-winner-pop"
+                initial={{ opacity: 0, scale: 0.85, y: -16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: [0.34, 1.4, 0.64, 1] }}
+              >
                 <span className="trophy">◆</span>
                 <h2>
                   {youWon
@@ -524,12 +533,14 @@ export function DuelArena({ pda }: { pda: string }) {
                 {payingOut ? (
                   <p className="muted">Sending the pot on-chain…</p>
                 ) : null}
-              </div>
+              </motion.div>
             ) : locked && !hashReady && !expired ? (
               <div className="wait-copy">
-                <EmoteHolo id="locked-in" label="Locked In" />
                 <p className="kicker">Reveal in</p>
-                <h2>{slotsLeft ?? REVEAL_DELAY_SLOTS} slots</h2>
+                <SlotCountdown
+                  slotsLeft={slotsLeft ?? REVEAL_DELAY_SLOTS}
+                  total={REVEAL_DELAY_SLOTS}
+                />
                 <p className="muted">
                   Current slot {slot?.slot?.toLocaleString()} · committed{" "}
                   {room.revealSlot ? (
@@ -543,44 +554,66 @@ export function DuelArena({ pda }: { pda: string }) {
               </div>
             ) : waiting ? (
               <div className="wait-copy">
-                <EmoteHolo id="locked-in" label="Locked In" />
                 <h2>Waiting for a challenger</h2>
-                <p className="muted">Match the wager to lock the hash window.</p>
+                <p className="muted">Lock the hash window to start the battle.</p>
               </div>
             ) : hashReady && !announced ? (
               <div className="wait-copy">
-                <EmoteHolo id="fist-bump" label="Electric Fist Bump" />
                 <h2>Hash landed</h2>
                 <p className="muted">Dice are rolling from the slot hash.</p>
               </div>
             ) : null}
 
-            <div className="dice-row">
-              <DiceFace
-                tone={skinForDemon(data.host?.demon)}
-                value={showRolls ? hostRoll : null}
-                rolling={!showRolls && (waiting || (locked && !expired))}
-                slow={waiting || (locked && !hashReady)}
-                trail={!showRolls && (waiting || (locked && !expired))}
-                crater={Boolean(showRolls && hostRoll)}
-                highlight={isHost}
-                label={data.host?.username ?? "Host"}
-              />
-              <span className={`vs ${locked && !settled ? "is-live" : ""}`}>VS</span>
-              <DiceFace
-                tone={data.challenger ? skinForDemon(data.challenger.demon) : "chain"}
-                value={showRolls ? challengerRoll : null}
-                rolling={!showRolls && (waiting || (locked && !expired))}
-                slow={waiting || (locked && !hashReady)}
-                trail={!showRolls && (waiting || (locked && !expired))}
-                crater={Boolean(showRolls && challengerRoll)}
-                highlight={isChallenger}
-                label={data.challenger?.username ?? "Open seat"}
-              />
+            <div className="duel-dice-grid">
+              <div
+                className={`duel-die-slot accent-host${isHost ? " is-you" : ""}${locked && !showRolls && !expired ? " is-rolling" : ""}${announced && winner === room.hostWallet ? " is-winner-slot" : ""}`}
+              >
+                <DiceFace
+                  tone={arena.hostSkin}
+                  value={showRolls ? hostRoll : null}
+                  idle={waiting}
+                  rolling={!showRolls && locked && !expired}
+                  slow={locked && !hashReady}
+                  highlight={isHost}
+                  winner={Boolean(announced && winner === room.hostWallet)}
+                  label={data.host?.username ?? "Host"}
+                  large
+                />
+              </div>
+              <div className="duel-vs-col">
+                <span className={`vs ${locked && !settled ? "is-live" : ""}`}>VS</span>
+              </div>
+              <div
+                className={`duel-die-slot accent-guest${!data.challenger ? " is-vacant" : ""}${isChallenger ? " is-you" : ""}${!showRolls && data.challenger && locked && !expired ? " is-rolling" : ""}${announced && winner === room.challengerWallet ? " is-winner-slot" : ""}`}
+              >
+                {data.challenger ? (
+                  <DiceFace
+                    tone={arena.guestSkin}
+                    value={showRolls ? challengerRoll : null}
+                    idle={waiting}
+                    rolling={!showRolls && locked && !expired}
+                    slow={locked && !hashReady}
+                    highlight={isChallenger}
+                    winner={Boolean(announced && winner === room.challengerWallet)}
+                    label={data.challenger?.username ?? "Challenger"}
+                    large
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="duel-vacant"
+                    disabled={busy || isHost || !publicKey || !profile}
+                    onClick={() => void join()}
+                  >
+                    <span className="duel-vacant-plus">+</span>
+                    <span className="die-label">Open seat / Challenge now</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {announced && (proofHash || hostRoll) ? (
-              <div className="proof-box">
+              <div className="proof-box arena-v2-proof">
                 <p className="kicker">Proof</p>
                 <dl>
                   <div>
@@ -627,65 +660,99 @@ export function DuelArena({ pda }: { pda: string }) {
 
             {error ? <p className="err">{error}</p> : null}
 
-            <div className="table-actions">
-              {waiting && !isHost && publicKey && profile ? (
-                <button className="btn-ember" disabled={busy} onClick={() => void join()}>
-                  {busy ? "Joining…" : `Match ${formatSol(room.wagerLamports)}`}
-                </button>
-              ) : null}
-              {waiting && isHost ? (
-                <button className="btn-ghost" disabled={busy} onClick={() => void cancel()}>
-                  Cancel & refund
-                </button>
-              ) : null}
-              {payoutFailed && inDuel && !settled && announced ? (
-                <button className="btn-ghost" disabled={busy} onClick={() => void retryPayout()}>
-                  Retry payout
-                </button>
-              ) : null}
-              {expired && !settled && room.challengerWallet ? (
-                <button className="btn-ghost" disabled={busy} onClick={() => void refund()}>
-                  Refund both
-                </button>
-              ) : null}
-              {canRematch && rematchOffer && rematchOffer.hostWallet === me ? (
-                <Link href={`/duel/${rematchOffer.pda}`} className="btn-ember">
-                  Go to rematch
-                </Link>
-              ) : null}
-              {canRematch && rematchOffer && rematchOffer.hostWallet !== me ? (
-                <button className="btn-ember" disabled={busy} onClick={() => void joinRematch()}>
-                  {busy ? "Joining…" : `Join rematch · ${formatSol(rematchOffer.wagerLamports)}`}
-                </button>
-              ) : null}
-              {canRematch && rematchOffer && rematchOffer.hostWallet !== me ? (
-                <button className="btn-ghost" disabled={busy} onClick={openRematch}>
-                  Different wager
-                </button>
-              ) : null}
-              {canRematch && !rematchOffer ? (
-                <button className="btn-ember" disabled={busy} onClick={openRematch}>
-                  Rematch
-                </button>
-              ) : null}
+            <div className="bd-fair-badge">
+              <GameIcon name="shield" size={14} />
+              <span>Provably Fair</span>
+              <em>All results verifiable on-chain</em>
             </div>
-          </div>
-
-          <div className="you-bar">
-            <DemonPortrait id={profile?.demon ?? "cinder-wraith"} size={36} />
-            <span>{profile?.username ?? "Spectator"}</span>
-            <span className="muted">{me ? shortKey(me) : "wallet disconnected"}</span>
-          </div>
-
-          <div className="sig-row">
-            <TxLink label="Create" sig={room.createSignature} />
-            <TxLink label="Join" sig={room.joinSignature} />
-            <TxLink label="Settle" sig={room.settleSignature} />
-          </div>
+            <div className="bd-spectators">
+              <span>◎ 0 Spectators</span>
+              <span>View All</span>
+            </div>
+          </ArenaTable>
         </section>
 
-        <ChatPanel roomId={pda} />
+        <aside className="bd-right">
+          <div className="bd-status-row">
+            <span className={`bd-chip gold ${waiting ? "on" : ""}`}>
+              {waiting ? "WAITING" : room.status.toUpperCase()}
+            </span>
+            <span className="bd-chip">
+              {waiting && "WAITING FOR CHALLENGER"}
+              {locked && !hashReady && "HASH LOCKED"}
+              {locked && hashReady && !announced && "ROLLING"}
+              {payingOut && "PAYING OUT"}
+              {settled && "SETTLED"}
+              {expired && !settled && "EXPIRED"}
+              {room.status === "cancelled" && "CANCELLED"}
+              {room.status === "refunded" && "REFUNDED"}
+            </span>
+          </div>
+          <ChatPanel roomId={pda} />
+        </aside>
       </div>
+
+      <nav className="bd-dock">
+        <Link href="/circles" className="bd-dock-item">
+          Create Circle
+        </Link>
+        <button
+          type="button"
+          className={`bd-dock-item${waiting && !isHost && publicKey && profile ? " is-active" : ""}`}
+          disabled={busy || !waiting || isHost || !publicKey || !profile}
+          onClick={() => void join()}
+        >
+          {busy && waiting && !isHost ? "Joining…" : "Join Circle"}
+        </button>
+        <button
+          type="button"
+          className={`bd-dock-item${payoutFailed || (announced && locked && !settled) ? " is-active" : ""}`}
+          disabled={busy || settled || (!payoutFailed && !(announced && inDuel && locked && !expired))}
+          onClick={() => void (payoutFailed ? retryPayout() : settle())}
+        >
+          <span className="bd-lock">{settled || (!announced && !payoutFailed) ? "🔒 " : ""}</span>
+          Settle
+        </button>
+      </nav>
+
+      {waiting && isHost ? (
+        <div className="bd-host-tools">
+          <button className="btn-ghost" disabled={busy} onClick={() => void cancel()}>
+            Cancel & refund
+          </button>
+        </div>
+      ) : null}
+      {expired && !settled && room.challengerWallet ? (
+        <div className="bd-host-tools">
+          <button className="btn-ghost" disabled={busy} onClick={() => void refund()}>
+            Refund both
+          </button>
+        </div>
+      ) : null}
+      {canRematch ? (
+        <div className="bd-host-tools">
+          {rematchOffer && rematchOffer.hostWallet === me ? (
+            <Link href={`/duel/${rematchOffer.pda}`} className="btn-ember">
+              Go to rematch
+            </Link>
+          ) : null}
+          {rematchOffer && rematchOffer.hostWallet !== me ? (
+            <>
+              <button className="btn-ember" disabled={busy} onClick={() => void joinRematch()}>
+                {busy ? "Joining…" : `Join rematch · ${formatSol(rematchOffer.wagerLamports)}`}
+              </button>
+              <button className="btn-ghost" disabled={busy} onClick={openRematch}>
+                Different wager
+              </button>
+            </>
+          ) : null}
+          {!rematchOffer ? (
+            <button className="btn-ember" disabled={busy} onClick={openRematch}>
+              Rematch
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
     {rematchOpen ? (
       <div className="overlay" onClick={() => !busy && setRematchOpen(false)}>
@@ -707,6 +774,7 @@ export function DuelArena({ pda }: { pda: string }) {
               onChange={(e) => setRematchWager(e.target.value)}
             />
           </label>
+          <ArenaPicker value={rematchArena} onChange={setRematchArena} />
           <div className="chip-row">
             {rematchChips.map((v) => (
               <button
@@ -741,15 +809,6 @@ function solInputFromLamports(lamports: string) {
   return n.toFixed(6).replace(/\.?0+$/, "");
 }
 
-function TxLink({ label, sig }: { label: string; sig: string | null }) {
-  if (!sig) return <span className="muted">{label} —</span>;
-  return (
-    <a href={explorerTx(sig)} target="_blank" rel="noreferrer">
-      {label} {shortKey(sig, 6, 4)}
-    </a>
-  );
-}
-
 function PlayerCard({
   title,
   profile,
@@ -758,33 +817,61 @@ function PlayerCard({
   wins,
   you,
   winner,
+  accent = "var(--ember)",
+  dieTone,
+  vacant = false,
 }: {
   title: string;
-  profile: { username: string; demon: string } | null;
+  profile: { username: string } | null;
   wallet: string | null;
   roll: number | null;
   wins: number;
   you?: boolean;
   winner?: boolean;
+  accent?: string;
+  dieTone?: string;
+  vacant?: boolean;
 }) {
+  const name = profile?.username ?? (wallet ? shortKey(wallet) : "Empty");
   return (
-    <div className={`panel player-card ${you ? "you" : ""} ${winner ? "winner" : ""}`}>
+    <motion.div
+      variants={stagger.item}
+      className={`panel player-card arena-v2-player ${you ? "you" : ""} ${winner ? "winner" : ""}${vacant ? " vacant" : ""}`}
+      style={{ "--player-accent": accent } as CSSProperties}
+      whileHover={{ y: -4, transition: motionTokens.spring }}
+    >
       <div className="player-top">
-        <DemonPortrait id={profile?.demon ?? "cinder-wraith"} size={44} />
+        <WalletBadge label={name} accent={accent} />
         <div>
-          <p className="kicker">{title}{you ? " · you" : ""}{winner ? " · winner" : ""}</p>
-          <p className="you-name">{profile?.username ?? (wallet ? shortKey(wallet) : "Empty")}</p>
+          <p className="you-name">
+            {profile?.username ?? (wallet ? shortKey(wallet) : "Empty")}
+            {you ? <span className="bd-you-tag">you</span> : null}
+          </p>
           {wallet ? (
             <a href={explorerAccount(wallet)} target="_blank" rel="noreferrer">
               {shortKey(wallet)}
             </a>
           ) : (
-            <span className="muted">Waiting</span>
+            <span className="muted">Waiting for challenger…</span>
           )}
         </div>
-        <div className="roll-mini">{roll ?? "—"}</div>
+        {winner ? <span className="bd-crown">♛</span> : null}
       </div>
-      <p className="muted">{wins} wins on record</p>
-    </div>
+      {vacant ? (
+        <div className="bd-open-seat">
+          <span>+</span>
+          OPEN SEAT
+        </div>
+      ) : (
+        <>
+          {dieTone ? (
+            <span className="player-die-chip" style={{ borderColor: accent, color: accent }}>
+              {dieTone.replace("-", " / ")}
+            </span>
+          ) : null}
+          <p className="muted">{wins} wins on record</p>
+        </>
+      )}
+    </motion.div>
   );
 }

@@ -2,31 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { formatSol, formatUsd, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
 import { CreateDuel } from "./CreateDuel";
-import { DemonPortrait } from "./DemonPortrait";
 import { useProfile } from "./ProfileProvider";
-import { arenaFor } from "@/lib/cosmetics";
+import { ARENAS, type Arena } from "@/lib/cosmetics";
 
 type RoomRow = {
   id: string;
-  duelId: string;
   hostWallet: string;
-  challengerWallet: string | null;
   wagerLamports: string;
   status: string;
-  host: { username: string; demon: string } | null;
-  challenger: { username: string; demon: string } | null;
+  arena: Arena | null;
+  host: { username: string } | null;
 };
 
 export function RoomBrowser() {
   const { profile } = useProfile();
+  const searchParams = useSearchParams();
+  const initialWager = searchParams.get("wager") ?? undefined;
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [q, setQ] = useState("");
   const [price, setPrice] = useState<number | null>(null);
   const [filter, setFilter] = useState<"open" | "all">("open");
-
+  const [arenaFilter, setArenaFilter] = useState<"all" | "alley" | "rooftop" | "underpass">("all");
   const [stats, setStats] = useState<{ programDeployed?: boolean } | null>(null);
 
   useEffect(() => {
@@ -54,38 +54,33 @@ export function RoomBrowser() {
     const needle = q.trim().toLowerCase();
     return rooms.filter((r) => {
       if (filter === "open" && r.status !== "waiting") return false;
+      if (arenaFilter !== "all" && r.arena?.id !== arenaFilter) return false;
       if (!needle) return true;
       return (
         r.host?.username.toLowerCase().includes(needle) ||
         r.hostWallet.toLowerCase().includes(needle) ||
-        r.id.toLowerCase().includes(needle)
+        r.id.toLowerCase().includes(needle) ||
+        r.arena?.name.toLowerCase().includes(needle)
       );
     });
-  }, [rooms, q, filter]);
+  }, [rooms, q, filter, arenaFilter]);
 
   return (
-    <div className="lobby">
-      <div className="notice">
-        Real SOL. 1v1 circles. Winner takes the full pot. Dice come from a
-        future Solana slot hash after both wagers lock.
-      </div>
+    <div className="dash-page">
       {stats && stats.programDeployed === false ? (
-        <div className="notice">
-          On-chain program is in <code>program/</code> but not on this cluster
-          yet. Circles, Neon, and wallets work. Escrow lands after{" "}
-          <code>anchor deploy</code> — see README.
+        <div className="notice notice-warn">
+          Program not deployed on this cluster — see README for{" "}
+          <code>anchor deploy</code>.
         </div>
       ) : null}
-      <header className="lobby-head">
+
+      <header className="dash-page-head">
         <div>
-          <p className="kicker">1v1 · winner takes all</p>
-          <h1>Dice circles</h1>
-          <p className="muted">
-            Two wallets, one pot, dice from a future Solana slot hash. No
-            operator key. No rake.
-          </p>
+          <p className="dash-eyebrow">1v1 lobby</p>
+          <h1>Play game</h1>
+          <p className="muted">Host or join a duel. Winner takes the pot.</p>
         </div>
-        {profile ? <CreateDuel /> : <p className="muted">Connect + bind a name to host.</p>}
+        {profile ? <CreateDuel initialWager={initialWager} /> : <p className="muted">Connect wallet to host.</p>}
       </header>
 
       <div className="toolbar">
@@ -96,48 +91,69 @@ export function RoomBrowser() {
           onChange={(e) => setQ(e.target.value)}
         />
         <div className="chip-row">
-          <button className={`chip ${filter === "open" ? "on" : ""}`} onClick={() => setFilter("open")}>
+          <button
+            type="button"
+            className={`chip ${filter === "open" ? "on" : ""}`}
+            onClick={() => setFilter("open")}
+          >
             Waiting
           </button>
-          <button className={`chip ${filter === "all" ? "on" : ""}`} onClick={() => setFilter("all")}>
+          <button
+            type="button"
+            className={`chip ${filter === "all" ? "on" : ""}`}
+            onClick={() => setFilter("all")}
+          >
             All
           </button>
+        </div>
+        <div className="chip-row">
+          <button
+            type="button"
+            className={`chip ${arenaFilter === "all" ? "on" : ""}`}
+            onClick={() => setArenaFilter("all")}
+          >
+            All arenas
+          </button>
+          {ARENAS.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={`chip env-${a.id} ${arenaFilter === a.id ? "on" : ""}`}
+              onClick={() => setArenaFilter(a.id)}
+            >
+              {a.name}
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="room-list">
         {shown.length === 0 ? (
-          <div className="empty">
-            No circles {filter === "open" ? "waiting" : "yet"}. Open one and the
-            wager lands in a PDA on Solana.
-          </div>
+          <div className="empty">No circles {filter === "open" ? "waiting" : "yet"}.</div>
         ) : (
-          shown.map((r, i) => {
+          shown.map((r) => {
             const sol = Number(r.wagerLamports) / 1e9;
+            const arena = r.arena;
             return (
               <Link
-                href={`/duel/${r.id}`}
                 key={r.id}
-                className="room-card"
-                style={{ animationDelay: `${i * 0.06}s` }}
+                href={`/duel/${r.id}`}
+                className={`glass-panel room-card env-${arena?.id ?? "alley"}`}
               >
-                <DemonPortrait id={r.host?.demon ?? "cinder-wraith"} size={52} />
+                <span className="room-arena-chip">{arena?.name ?? "Arena"}</span>
                 <div className="room-main">
                   <div className="room-top">
                     <h3>{r.host?.username ?? shortKey(r.hostWallet)}</h3>
                     <span className={`badge ${r.status}`}>{r.status}</span>
                   </div>
-                  <p className="muted">
-                    {arenaFor(r.id).name} · {shortKey(r.hostWallet)} · PDA{" "}
-                    {shortKey(r.id, 6, 4)}
-                  </p>
+                  <p className="muted">{shortKey(r.hostWallet)}</p>
                 </div>
                 <div className="room-wager">
                   <b className="gold">{formatSol(r.wagerLamports)}</b>
-                  <span>{formatUsd(sol, price)} each</span>
+                  <span>{formatUsd(sol, price)}</span>
                 </div>
                 <span className="join-cta">
-                  {r.status === "waiting" ? "Enter" : "Watch"}
+                  {r.status === "waiting" ? "Join" : "View"}
                 </span>
               </Link>
             );

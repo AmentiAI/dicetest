@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { matchEvents, profiles, rooms } from "@/lib/db/schema";
+import { arenaForRoom } from "@/lib/arena-db";
 
 export const runtime = "nodejs";
 
@@ -53,8 +54,11 @@ export async function GET(_req: Request, ctx: Ctx) {
       }
     }
 
+    const arena = await arenaForRoom(id);
+
     return NextResponse.json({
       room,
+      arena,
       host: host ?? null,
       challenger: challenger ?? null,
       rematch,

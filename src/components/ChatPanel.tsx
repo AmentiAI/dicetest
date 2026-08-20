@@ -48,15 +48,49 @@ export function ChatPanel({ roomId }: { roomId: string }) {
     setMessages(json?.messages ?? []);
   }
 
+  const sys = messages.filter((m) => m.kind === "system");
+  const chat = messages.filter((m) => m.kind !== "system");
+  const online = new Set(chat.map((m) => m.wallet)).size || (publicKey ? 1 : 0);
+
   return (
-    <aside className="chat">
-      <p className="kicker">Circle log</p>
-      <div className="chat-log" ref={scroller}>
-        {messages.map((m) => (
-          <p key={m.id} className={m.kind === "system" ? "sys" : ""}>
-            <b>{m.username}</b> {m.body}
+    <aside className="bd-chat">
+      <p className="bd-chat-kicker">Circle log</p>
+      <div className="bd-log">
+        {(sys.length ? sys : messages.slice(0, 4)).map((m) => (
+          <p key={m.id}>
+            <b>SYS</b> {m.body}
           </p>
         ))}
+        {messages.length === 0 ? (
+          <>
+            <p>
+              <b>SYS</b> Circle opened…
+            </p>
+            <p>
+              <b>SYS</b> Waiting for challenger…
+            </p>
+          </>
+        ) : null}
+      </div>
+
+      <div className="bd-chat-head">
+        <strong>CHAT</strong>
+        <span className="bd-online">
+          <i /> {online} online
+        </span>
+      </div>
+      <div className="chat-log" ref={scroller}>
+        {chat.length === 0 ? (
+          <p className="sys">
+            <b>Block Dice</b> Provably fair 1v1. Winner takes the pot.
+          </p>
+        ) : (
+          chat.map((m) => (
+            <p key={m.id} className={m.kind === "system" ? "sys" : ""}>
+              <b>{m.username}</b> {m.body}
+            </p>
+          ))
+        )}
       </div>
       <form
         className="chat-form"

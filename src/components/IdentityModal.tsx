@@ -1,14 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { DEMONS } from "@/lib/demons";
-import { DemonPortrait } from "./DemonPortrait";
 import { useProfile } from "./ProfileProvider";
 
 export function IdentityModal() {
   const { profile, save } = useProfile();
   const [username, setUsername] = useState(profile?.username ?? "");
-  const [demon, setDemon] = useState(profile?.demon ?? DEMONS[0].id);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -16,7 +13,7 @@ export function IdentityModal() {
     setBusy(true);
     setError(null);
     try {
-      await save(username.trim(), demon);
+      await save(username.trim());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not bind identity");
     } finally {
@@ -30,7 +27,7 @@ export function IdentityModal() {
         <p className="kicker">Call sign</p>
         <h2>Name the duelist</h2>
         <p className="muted">
-        Signed by your wallet. Stored in Neon. The chain only sees the pubkey
+          Signed by your wallet. Stored in Neon. The chain only sees the pubkey
           and the SOL.
         </p>
         <label className="field">
@@ -42,21 +39,6 @@ export function IdentityModal() {
             onChange={(e) => setUsername(e.target.value)}
           />
         </label>
-        <p className="field-label">Choose your set</p>
-        <div className="demon-row">
-          {DEMONS.map((d) => (
-            <button
-              key={d.id}
-              type="button"
-              className={`demon-pick ${demon === d.id ? "on" : ""}`}
-              onClick={() => setDemon(d.id)}
-              style={{ color: d.accent }}
-            >
-              <DemonPortrait id={d.id} size={56} selected={demon === d.id} />
-              <span>{d.name}</span>
-            </button>
-          ))}
-        </div>
         {error ? <p className="err">{error}</p> : null}
         <button
           className="btn-ember"

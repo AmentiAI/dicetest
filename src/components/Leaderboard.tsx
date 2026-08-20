@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import { formatSol, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
-import { DemonPortrait } from "./DemonPortrait";
+import { WalletBadge } from "./WalletBadge";
 
 type Leader = {
   wallet: string;
   username: string;
-  demon: string;
   wins: number;
   losses: number;
   volumeLamports: string;
@@ -32,10 +31,10 @@ export function Leaderboard() {
   }, []);
 
   return (
-    <div className="lobby">
-      <header className="lobby-head">
+    <div className="dash-page">
+      <header className="dash-page-head">
         <div>
-          <p className="kicker">On record</p>
+          <p className="dash-eyebrow">On record</p>
           <h1>Leaderboard</h1>
           <p className="muted">
             Wins land in Neon after an on-chain settle. Volume is SOL you put
@@ -48,9 +47,9 @@ export function Leaderboard() {
           <div className="empty">No settled duels yet.</div>
         ) : (
           leaders.map((p, i) => (
-            <div key={p.wallet} className="lead-row">
+            <div key={p.wallet} className="glass-panel lead-row">
               <span className="rank">{i + 1}</span>
-              <DemonPortrait id={p.demon} size={40} />
+              <WalletBadge label={p.username} />
               <div>
                 <b>{p.username}</b>
                 <p className="muted">{shortKey(p.wallet)}</p>

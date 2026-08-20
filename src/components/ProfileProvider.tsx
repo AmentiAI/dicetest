@@ -11,13 +11,14 @@ import {
 import { useWallet } from "@solana/wallet-adapter-react";
 import { identityMessage } from "@/lib/auth";
 import { bytesToBase64 } from "@/lib/base64";
-import { DEMONS, type DemonId } from "@/lib/demons";
 import { getJson, postJson } from "@/lib/http";
+
+const DEFAULT_DEMON = "cinder-wraith";
 
 export type Profile = {
   wallet: string;
   username: string;
-  demon: DemonId | string;
+  demon: string;
   wins: number;
   losses: number;
   volumeLamports: string;
@@ -26,7 +27,7 @@ export type Profile = {
 const Ctx = createContext<{
   profile: Profile | null;
   loading: boolean;
-  save: (username: string, demon: string) => Promise<void>;
+  save: (username: string) => Promise<void>;
   refresh: () => Promise<void>;
 } | null>(null);
 
@@ -56,11 +57,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const save = useCallback(
-    async (username: string, demon: string) => {
+    async (username: string) => {
       if (!publicKey || !signMessage) {
         throw new Error("Connect a wallet that can sign messages");
       }
       const wallet = publicKey.toBase58();
+      const demon = profile?.demon ?? DEFAULT_DEMON;
       const message = identityMessage(wallet, username, demon);
       const sig = await signMessage(new TextEncoder().encode(message));
       try {
@@ -86,7 +88,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw e;
       }
     },
-    [publicKey, signMessage],
+    [publicKey, signMessage, profile?.demon],
   );
 
   return (
@@ -102,6 +104,3 @@ export function useProfile() {
   return ctx;
 }
 
-export function demonOrDefault(id: string | undefined) {
-  return DEMONS.some((d) => d.id === id) ? id! : DEMONS[0].id;
-}

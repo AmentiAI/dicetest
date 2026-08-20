@@ -1,139 +1,14 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import Link from "next/link";
+import { type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { WalletButton } from "./WalletButton";
 import { IdentityModal } from "./IdentityModal";
 import { ProfileProvider, useProfile } from "./ProfileProvider";
-import { formatUsd } from "@/lib/format";
-import { getJson } from "@/lib/http";
-import { SOLANA_NETWORK } from "@/lib/solana/constants";
-import { isAdminWallet } from "@/lib/admin";
-
-const LINKS = [
-  { href: "/circles", label: "Play" },
-  { href: "/circles", label: "Dice Circles" },
-  { href: "/history", label: "Match History" },
-  { href: "/how-to-play", label: "How to Play" },
-  { href: "/fair", label: "Provably Fair" },
-];
-
-function Header() {
-  const pathname = usePathname();
-  const { publicKey } = useWallet();
-  const { connection } = useConnection();
-  const { profile } = useProfile();
-  const [balance, setBalance] = useState<number | null>(null);
-  const [price, setPrice] = useState<number | null>(null);
-  const [sound, setSound] = useState(true);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("blockdice-sound");
-    if (stored === "0") setSound(false);
-  }, []);
-
-  useEffect(() => {
-    void getJson<{ usd: number | null }>("/api/price").then((j) =>
-      setPrice(j?.usd ?? null),
-    );
-  }, []);
-
-  useEffect(() => {
-    if (!publicKey) {
-      setBalance(null);
-      return;
-    }
-    let stop = false;
-    const tick = async () => {
-      try {
-        const lamports = await connection.getBalance(publicKey, "confirmed");
-        if (!stop) setBalance(lamports);
-      } catch {
-        /* wallet/extension fetch interceptors sometimes throw here */
-      }
-    };
-    void tick();
-    const t = setInterval(() => void tick(), 30_000);
-    return () => {
-      stop = true;
-      clearInterval(t);
-    };
-  }, [publicKey, connection]);
-
-  const sol = balance != null ? balance / LAMPORTS_PER_SOL : null;
-
-  return (
-    <header className="topbar">
-      <Link href="/" className="logo" onClick={() => setOpen(false)}>
-        <span className="logo-die" aria-hidden>
-          ⚄
-        </span>
-        BLOCK DICE
-      </Link>
-
-      <nav className={`topnav ${open ? "open" : ""}`}>
-        {LINKS.map((l) => (
-          <Link
-            key={l.label}
-            href={l.href}
-            className={pathname === l.href || (l.href === "/circles" && pathname.startsWith("/duel")) ? "on" : ""}
-            onClick={() => setOpen(false)}
-          >
-            {l.label}
-          </Link>
-        ))}
-        {isAdminWallet(publicKey?.toBase58()) ? (
-          <Link
-            href="/admin"
-            className={pathname.startsWith("/admin") ? "on" : ""}
-            onClick={() => setOpen(false)}
-          >
-            Admin
-          </Link>
-        ) : null}
-      </nav>
-
-      <div className="top-actions">
-        <span className="net-pill">
-          Solana {SOLANA_NETWORK === "mainnet-beta" ? "Mainnet" : "Devnet"}
-        </span>
-        {sol != null ? (
-          <span className="bal-pill" title={formatUsd(sol, price)}>
-            {sol.toLocaleString(undefined, { maximumFractionDigits: 3 })} SOL
-          </span>
-        ) : null}
-        {profile ? <span className="name-pill">{profile.username}</span> : null}
-        <button
-          className={`icon-btn ${sound ? "on" : ""}`}
-          aria-label={sound ? "Mute" : "Unmute"}
-          onClick={() => {
-            const next = !sound;
-            setSound(next);
-            localStorage.setItem("blockdice-sound", next ? "1" : "0");
-          }}
-        >
-          {sound ? "🔊" : "🔇"}
-        </button>
-        <WalletButton compact />
-        {SOLANA_NETWORK !== "mainnet-beta" && publicKey ? (
-          <button
-            className="btn-ghost btn-compact"
-            onClick={() => void connection.requestAirdrop(publicKey, LAMPORTS_PER_SOL)}
-          >
-            Airdrop
-          </button>
-        ) : null}
-        <button className="menu-btn" aria-label="Menu" onClick={() => setOpen((v) => !v)}>
-          ☰
-        </button>
-      </div>
-    </header>
-  );
-}
+import { DashboardSidebar } from "./dashboard/DashboardSidebar";
+import { DashboardTopbar } from "./dashboard/DashboardTopbar";
+import { DashboardRightRail } from "./dashboard/DashboardRightRail";
+import { DuelNav } from "./DuelNav";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 function ShellInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -142,11 +17,33 @@ function ShellInner({ children }: { children: ReactNode }) {
   const needIdentity = Boolean(
     publicKey && !profile && !pathname.startsWith("/admin"),
   );
+  const showRail = pathname === "/" || pathname === "/circles";
+  const isDuel = pathname.startsWith("/duel");
+
+  if (isDuel) {
+    return (
+      <div className="bd-app">
+        <DuelNav />
+        <div className="bd-stage">{children}</div>
+        {needIdentity ? <IdentityModal /> : null}
+      </div>
+    );
+  }
 
   return (
-    <div className="app-frame">
-      <Header />
-      <main className="stage">{children}</main>
+    <div className="dash-app">
+      <div className="dash-layout">
+        <DashboardSidebar />
+        <div className="dash-content">
+          <DashboardTopbar />
+          <div className={`dash-body${showRail ? "" : " no-rail"}`}>
+            <main className={`dash-main${showRail ? "" : " dash-main-wide"}`}>
+              {children}
+            </main>
+            {showRail ? <DashboardRightRail /> : null}
+          </div>
+        </div>
+      </div>
       {needIdentity ? <IdentityModal /> : null}
     </div>
   );

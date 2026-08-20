@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import type { DieSkin } from "@/lib/cosmetics";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import type { DieTone, DieSkin, HeroDieTone } from "@/lib/cosmetics";
 
 const PIP_CELLS: Record<number, string[]> = {
   1: ["2 / 2"],
@@ -12,8 +12,6 @@ const PIP_CELLS: Record<number, string[]> = {
   6: ["1 / 1", "1 / 3", "2 / 1", "2 / 3", "3 / 1", "3 / 3"],
 };
 
-// Cube local faces: 1 front, 2 top, 3 right, 4 left, 5 bottom, 6 back.
-// Targets put the rolled number on +Y (the top of the die on the table).
 const FACE_ROT: Record<number, [number, number]> = {
   1: [-90, 0],
   2: [0, 0],
@@ -23,12 +21,25 @@ const FACE_ROT: Record<number, [number, number]> = {
   6: [90, 0],
 };
 
+const ORBIT_PHASE: Record<string, number> = {
+  ice: 0,
+  chain: 2.4,
+  burn: 4.8,
+  black: 0.8,
+  red: 3.2,
+  "black-red": 0,
+  "green-purple": 2.4,
+  "orange-blue": 4.8,
+  "glass-purple": 0,
+  "glass-green": 2.4,
+  "glass-orange": 4.8,
+};
+
 function continueTo(prev: number, target: number, extraTurns: number) {
   const tau = 360;
   const want = ((target % tau) + tau) % tau;
   const cur = ((prev % tau) + tau) % tau;
-  const delta = (want - cur + tau) % tau;
-  return prev + extraTurns * tau + delta;
+  return prev + extraTurns * tau + ((want - cur + tau) % tau);
 }
 
 function Pips({ n }: { n: number }) {
@@ -41,16 +52,37 @@ function Pips({ n }: { n: number }) {
   );
 }
 
-function asSkin(tone: DieSkin | "black" | "red"): DieSkin {
-  if (tone === "black") return "ice";
-  if (tone === "red") return "chain";
+function toneClass(tone: DieTone): string {
+  if (tone === "black") return "black";
+  if (tone === "red") return "red";
   return tone;
 }
 
-function easeOutBack(t: number) {
-  const c1 = 1.18;
-  const c3 = c1 + 1;
-  return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
+function isAltSpin(tone: DieTone) {
+  return (
+    tone === "chain" ||
+    tone === "red" ||
+    tone === "burn" ||
+    tone === "green-purple" ||
+    tone === "glass-green"
+  );
+}
+
+function easeOutCubic(t: number) {
+  return 1 - (1 - t) ** 3;
+}
+
+function applyRot(
+  el: HTMLDivElement,
+  x: number,
+  y: number,
+  z: number,
+  store: { x: number; y: number; z: number },
+) {
+  store.x = x;
+  store.y = y;
+  store.z = z;
+  el.style.transform = `rotateX(${x}deg) rotateY(${y}deg) rotateZ(${z}deg)`;
 }
 
 export function CubeDie({
@@ -59,24 +91,54 @@ export function CubeDie({
   rolling = false,
   orbit = false,
   slow = false,
+  idle = false,
+  onLand,
 }: {
-  tone: DieSkin | "black" | "red";
+  tone: DieTone;
   value?: number | null;
   rolling?: boolean;
   orbit?: boolean;
   slow?: boolean;
+  idle?: boolean;
+  onLand?: () => void;
 }) {
-  const skin = asSkin(tone);
-  const alt = skin !== "ice";
+  const skin = toneClass(tone);
+  const alt = isAltSpin(tone);
   const cubeRef = useRef<HTMLDivElement>(null);
-  const angles = useRef({ x: 0, y: 0, z: 0 });
+  const angles = useRef({ x: -28, y: 24, z: 0 });
   const snapOnMount = useRef(value != null && value >= 1 && value <= 6);
   const landed = useRef<number | null>(null);
+  const onLandRef = useRef(onLand);
+  const [settled, setSettled] = useState(false);
+
+  onLandRef.current = onLand;
 
   useEffect(() => {
-    if (orbit) return;
     const el = cubeRef.current;
     if (!el) return;
+
+    if (orbit) {
+      setSettled(false);
+      el.style.transition = "none";
+      let raf = 0;
+      const phase = ORBIT_PHASE[skin] ?? 0;
+      const t0 = performance.now();
+      const yaw = idle ? 12 : 28;
+      const wobble = idle ? 0.35 : 0.7;
+      const tick = (now: number) => {
+        const t = (now - t0) / 1000 + phase;
+        applyRot(
+          el,
+          -26 + Math.sin(t * wobble) * (idle ? 6 : 8),
+          22 + t * yaw,
+          Math.sin(t * wobble * 0.8) * (idle ? 4 : 5),
+          angles.current,
+        );
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(raf);
+    }
 
     if (value && value >= 1 && value <= 6) {
       if (landed.current === value) return;
@@ -84,39 +146,44 @@ export function CubeDie({
       if (snapOnMount.current) {
         snapOnMount.current = false;
         landed.current = value;
-        angles.current = { x: tx, y: ty, z: 0 };
+        applyRot(el, tx, ty, 0, angles.current);
         el.style.transition = "none";
-        el.style.transform = `rotateX(${tx}deg) rotateY(${ty}deg) rotateZ(0deg)`;
         return;
       }
 
-      const extraX = alt ? 2 : 2;
-      const extraY = alt ? 3 : 2;
-      const delay = alt ? 90 : 0;
+      setSettled(false);
       let raf = 0;
       const timer = window.setTimeout(() => {
         landed.current = value;
         const x0 = angles.current.x;
         const y0 = angles.current.y;
         const z0 = angles.current.z;
-        const x1 = continueTo(x0, tx, extraX);
-        const y1 = continueTo(y0, ty, extraY);
+        const x1 = continueTo(x0, tx, alt ? 2 : 2);
+        const y1 = continueTo(y0, ty, alt ? 3 : 2);
         const z1 = continueTo(z0, 0, 1);
         const t0 = performance.now();
-        const duration = 980;
+        const duration = slow ? 1600 : 1400;
         el.style.transition = "none";
         const tick = (now: number) => {
           const t = Math.min(1, (now - t0) / duration);
-          const e = easeOutBack(t);
-          const x = x0 + (x1 - x0) * e;
-          const y = y0 + (y1 - y0) * e;
-          const z = z0 + (z1 - z0) * e;
-          angles.current = { x, y, z };
-          el.style.transform = `rotateX(${x}deg) rotateY(${y}deg) rotateZ(${z}deg)`;
-          if (t < 1) raf = requestAnimationFrame(tick);
+          const e = easeOutCubic(t);
+          applyRot(
+            el,
+            x0 + (x1 - x0) * e,
+            y0 + (y1 - y0) * e,
+            z0 + (z1 - z0) * e,
+            angles.current,
+          );
+          if (t < 1) {
+            raf = requestAnimationFrame(tick);
+          } else {
+            setSettled(true);
+            onLandRef.current?.();
+            window.setTimeout(() => setSettled(false), 400);
+          }
         };
         raf = requestAnimationFrame(tick);
-      }, delay);
+      }, alt ? 60 : 0);
       return () => {
         window.clearTimeout(timer);
         cancelAnimationFrame(raf);
@@ -124,6 +191,7 @@ export function CubeDie({
     }
 
     landed.current = null;
+    setSettled(false);
 
     if (rolling) {
       el.style.transition = "none";
@@ -132,65 +200,65 @@ export function CubeDie({
       const x0 = angles.current.x;
       const y0 = angles.current.y;
       const z0 = angles.current.z;
-      const speedX = slow ? (alt ? 0.068 : 0.08) : alt ? 0.46 : 0.52;
-      const speedY = slow ? (alt ? 0.09 : 0.074) : alt ? 0.61 : 0.56;
-      const speedZ = slow ? 0.038 : 0.27;
-      const wobble = slow ? 5 : 14;
+      const mul = slow ? 0.18 : 0.38;
       const tick = (now: number) => {
         const dt = now - t0;
-        const x = x0 + dt * speedX + Math.sin(dt * 0.007) * wobble;
-        const y = y0 + dt * speedY + Math.cos(dt * 0.0055) * wobble * 0.6;
-        const z = z0 + dt * speedZ;
-        angles.current = { x, y, z };
-        el.style.transform = `rotateX(${x}deg) rotateY(${y}deg) rotateZ(${z}deg)`;
+        applyRot(
+          el,
+          x0 + dt * 0.09 * mul + Math.sin(dt * 0.003) * (slow ? 5 : 9),
+          y0 + dt * 0.12 * mul,
+          z0 + dt * 0.04 * mul,
+          angles.current,
+        );
         raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(raf);
     }
 
-    angles.current = { x: 0, y: 0, z: 0 };
-    el.style.transition = "transform 0.55s cubic-bezier(0.22, 0.8, 0.28, 1)";
-    el.style.transform = "rotateX(0deg) rotateY(0deg) rotateZ(0deg)";
-  }, [alt, orbit, rolling, slow, value]);
+    applyRot(el, -28, 24, 0, angles.current);
+    el.style.transition = "transform 0.45s ease";
+  }, [alt, idle, orbit, rolling, skin, slow, value]);
 
   return (
     <div
-      className={`cube-scene ${skin}${orbit ? " is-orbit" : ""}${rolling && !value ? " is-tumbling" : ""}${rolling && slow && !value ? " slow-tumble" : ""}`}
+      className={[
+        "cube-scene",
+        skin,
+        orbit ? "is-orbit" : "",
+        rolling && !value ? "is-tumbling" : "",
+        rolling && slow ? "slow-tumble" : "",
+        settled ? "is-settled" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={{ "--die-accent": skinAccent(tone) } as CSSProperties}
     >
       <div className="cube-cam">
         <div
           className="cube"
-          ref={orbit ? undefined : cubeRef}
-          style={
-            orbit
-              ? undefined
-              : {
-                  transform: `rotateX(${angles.current.x}deg) rotateY(${angles.current.y}deg) rotateZ(${angles.current.z}deg)`,
-                }
-          }
+          ref={cubeRef}
+          style={{
+            transform: `rotateX(${angles.current.x}deg) rotateY(${angles.current.y}deg) rotateZ(${angles.current.z}deg)`,
+          }}
         >
-          <div className="cube-face front">
-            <Pips n={1} />
-          </div>
-          <div className="cube-face back">
-            <Pips n={6} />
-          </div>
-          <div className="cube-face right">
-            <Pips n={3} />
-          </div>
-          <div className="cube-face left">
-            <Pips n={4} />
-          </div>
-          <div className="cube-face top">
-            <Pips n={2} />
-          </div>
-          <div className="cube-face bottom">
-            <Pips n={5} />
-          </div>
+          <div className="cube-face front"><Pips n={1} /></div>
+          <div className="cube-face back"><Pips n={6} /></div>
+          <div className="cube-face right"><Pips n={3} /></div>
+          <div className="cube-face left"><Pips n={4} /></div>
+          <div className="cube-face top"><Pips n={2} /></div>
+          <div className="cube-face bottom"><Pips n={5} /></div>
         </div>
       </div>
       <i className="cube-shadow" aria-hidden />
     </div>
   );
+}
+
+function skinAccent(tone: DieTone) {
+  if (tone === "glass-purple" || tone === "burn") return "#a855f7";
+  if (tone === "glass-green" || tone === "green-purple" || tone === "chain") return "#22c55e";
+  if (tone === "glass-orange" || tone === "orange-blue") return "#f97316";
+  if (tone === "black-red" || tone === "red") return "#ef4444";
+  return "#22d3ee";
 }

@@ -80,17 +80,17 @@ export default function HistoryPage() {
   }, []);
 
   return (
-    <div>
-      <div className="lobby-head">
+    <div className="dash-page">
+      <header className="dash-page-head">
         <div>
-          <p className="kicker">Receipts</p>
+          <p className="dash-eyebrow">Receipts</p>
           <h1>Match history</h1>
           <p className="muted">
             Every settled circle with the slot hash, rolls, PDA, and explorer
             transactions used to prove the result.
           </p>
         </div>
-      </div>
+      </header>
       <div className="history-list">
         {rooms.length === 0 ? (
           <div className="empty">No verified rolls yet.</div>
@@ -108,7 +108,7 @@ export default function HistoryPage() {
                     : "—";
             const check = proofCheck(r);
             return (
-              <article key={r.id} className="history-card">
+              <article key={r.id} className="glass-panel history-card">
                 <header className="history-head">
                   <div>
                     <h3>

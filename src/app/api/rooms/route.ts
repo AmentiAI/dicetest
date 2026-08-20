@@ -2,6 +2,8 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { chatMessages, matchEvents, profiles, rooms } from "@/lib/db/schema";
+import { arenasForRooms } from "@/lib/arena-db";
+import { parseArenaId } from "@/lib/cosmetics";
 
 export const runtime = "nodejs";
 
@@ -40,10 +42,15 @@ export async function GET(req: Request) {
           .limit(limit)
       : await db().select().from(rooms).orderBy(desc(rooms.createdAt)).limit(limit);
     const enriched = await withProfiles(list);
+    const arenas = await arenasForRooms(list.map((r) => r.id));
+    const roomsOut = enriched.map((r) => ({
+      ...r,
+      arena: arenas[r.id] ?? null,
+    }));
     const waiting = list.filter((r) => r.status === "waiting").length;
     const locked = list.filter((r) => r.status === "locked").length;
     return NextResponse.json({
-      rooms: enriched,
+      rooms: roomsOut,
       stats: {
         activeRooms: waiting + locked,
         waiting,
@@ -70,6 +77,7 @@ export async function POST(req: Request) {
     (body as { createSignature?: unknown }).createSignature ?? "",
   );
   const rematchOf = String((body as { rematchOf?: unknown }).rematchOf ?? "");
+  const arena = parseArenaId((body as { arena?: unknown }).arena);
 
   if (!pda || !duelId || !hostWallet || !wagerLamports || !createSignature) {
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
@@ -110,7 +118,12 @@ export async function POST(req: Request) {
   await db().insert(matchEvents).values({
     roomId: pda,
     event: "created",
-    payload: { hostWallet, wagerLamports: onchain.wagerLamports.toString(), program: PROGRAM_ID.toBase58() },
+    payload: {
+      hostWallet,
+      wagerLamports: onchain.wagerLamports.toString(),
+      program: PROGRAM_ID.toBase58(),
+      arena,
+    },
   });
   await db().insert(chatMessages).values({
     roomId: pda,
