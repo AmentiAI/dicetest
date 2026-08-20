@@ -4247,11 +4247,26 @@ code {
   gap: 12px;
   justify-content: center;
 }
+.arena-v2-actions {
+  width: min(100%, 440px);
+  margin: 16px auto 0;
+}
 .arena-v2-actions .btn-ember,
 .arena-v2-actions .btn-ghost {
   padding: 14px 24px !important;
   font-size: 15px;
   min-width: 160px;
+}
+.bd-duel .btn-join {
+  width: 100%;
+  min-width: 0 !important;
+  padding: 16px 28px !important;
+  font-size: 17px !important;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border-radius: 14px;
+  background: linear-gradient(90deg, #9333ea, #6366f1);
+  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.45);
 }
 .arena-v2-foot {
   display: flex;
@@ -5764,8 +5779,7 @@ body {
   cursor: pointer;
   text-decoration: none;
 }
-.bd-dock-item.is-active,
-.bd-dock a.bd-dock-item:first-child {
+.bd-dock-item.is-active {
   color: #67e8f9;
   border-bottom-color: #22d3ee;
   text-shadow: 0 0 16px rgba(34, 211, 238, 0.45);

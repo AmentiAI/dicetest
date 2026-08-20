@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import {
   cancelIx,
   createDuelIx,
@@ -34,6 +35,7 @@ import { ArenaPicker } from "./ArenaPicker";
 import { SlotCountdown } from "./SlotCountdown";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { GameIcon } from "./GameIcon";
+import { WalletButton } from "./WalletButton";
 import { useProfile } from "./ProfileProvider";
 import { arenaForSeed, type Arena, type ArenaId } from "@/lib/cosmetics";
 import { stagger, motion as motionTokens } from "@/lib/motion";
@@ -84,6 +86,7 @@ const autoSettled = new Set<string>();
 export function DuelArena({ pda }: { pda: string }) {
   const wallet = useWallet();
   const { publicKey } = wallet;
+  const { setVisible: openWallet } = useWalletModal();
   const { connection } = useConnection();
   const { profile } = useProfile();
   const router = useRouter();
@@ -252,6 +255,18 @@ export function DuelArena({ pda }: { pda: string }) {
       }),
       { join: "1" },
     );
+  }
+
+  function requestJoin() {
+    if (!publicKey) {
+      openWallet(true);
+      return;
+    }
+    if (!profile) {
+      setError("Pick a username in the popup, then join.");
+      return;
+    }
+    void join();
   }
 
   async function settle() {
@@ -602,11 +617,15 @@ export function DuelArena({ pda }: { pda: string }) {
                   <button
                     type="button"
                     className="duel-vacant"
-                    disabled={busy || isHost || !publicKey || !profile}
-                    onClick={() => void join()}
+                    disabled={busy || isHost}
+                    onClick={requestJoin}
                   >
                     <span className="duel-vacant-plus">+</span>
-                    <span className="die-label">Open seat / Challenge now</span>
+                    <span className="die-label">
+                      {isHost
+                        ? "Open seat"
+                        : `Join · match ${formatSol(room.wagerLamports)}`}
+                    </span>
                   </button>
                 )}
               </div>
@@ -660,6 +679,29 @@ export function DuelArena({ pda }: { pda: string }) {
 
             {error ? <p className="err">{error}</p> : null}
 
+            <div className="table-actions arena-v2-actions">
+              {waiting && !isHost ? (
+                publicKey && profile ? (
+                  <button
+                    className="btn-ember btn-join"
+                    disabled={busy}
+                    onClick={() => void join()}
+                  >
+                    {busy
+                      ? "Matching on-chain…"
+                      : `Join & wager ${formatSol(room.wagerLamports)}`}
+                  </button>
+                ) : publicKey ? (
+                  <p className="muted">Pick a username to lock your wager.</p>
+                ) : (
+                  <WalletButton />
+                )
+              ) : null}
+              {waiting && isHost ? (
+                <p className="muted">Share this page — opponent matches {formatSol(room.wagerLamports)} to start.</p>
+              ) : null}
+            </div>
+
             <div className="bd-fair-badge">
               <GameIcon name="shield" size={14} />
               <span>Provably Fair</span>
@@ -698,11 +740,13 @@ export function DuelArena({ pda }: { pda: string }) {
         </Link>
         <button
           type="button"
-          className={`bd-dock-item${waiting && !isHost && publicKey && profile ? " is-active" : ""}`}
-          disabled={busy || !waiting || isHost || !publicKey || !profile}
-          onClick={() => void join()}
+          className={`bd-dock-item${waiting && !isHost ? " is-active" : ""}`}
+          disabled={busy || !waiting || isHost}
+          onClick={requestJoin}
         >
-          {busy && waiting && !isHost ? "Joining…" : "Join Circle"}
+          {busy && waiting && !isHost
+            ? "Joining…"
+            : `Join · ${formatSol(room.wagerLamports)}`}
         </button>
         <button
           type="button"
