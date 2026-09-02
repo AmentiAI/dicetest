@@ -11,6 +11,7 @@ import { explainChainError, sendIxs } from "@/lib/solana/send";
 import { postJson } from "@/lib/http";
 import { useProfile } from "./ProfileProvider";
 import { ArenaPicker } from "./ArenaPicker";
+import { CoolBtn } from "./CoolBtn";
 import type { ArenaId } from "@/lib/cosmetics";
 
 export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
@@ -74,9 +75,9 @@ export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
 
   return (
     <>
-      <button className="btn-ember btn-compact" onClick={() => setOpen(true)}>
+      <CoolBtn className="btn-compact" pulse onClick={() => setOpen(true)}>
         + Open a circle
-      </button>
+      </CoolBtn>
       {open ? (
         <div className="overlay" onClick={() => !busy && setOpen(false)}>
           <div className="panel create-panel" onClick={(e) => e.stopPropagation()}>
@@ -108,12 +109,12 @@ export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
             </div>
             {error ? <p className="err">{error}</p> : null}
             <div className="row-actions">
-              <button className="btn-ghost" disabled={busy} onClick={() => setOpen(false)}>
+              <CoolBtn variant="ghost" disabled={busy} onClick={() => setOpen(false)}>
                 Back
-              </button>
-              <button className="btn-ember" disabled={busy} onClick={() => void create()}>
+              </CoolBtn>
+              <CoolBtn disabled={busy} pulse={!busy} onClick={() => void create()}>
                 {busy ? "Sending…" : "Lock wager on-chain"}
-              </button>
+              </CoolBtn>
             </div>
           </div>
         </div>

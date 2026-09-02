@@ -36,6 +36,7 @@ import { SlotCountdown } from "./SlotCountdown";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { GameIcon } from "./GameIcon";
 import { WalletButton } from "./WalletButton";
+import { CoolBtn } from "./CoolBtn";
 import { useProfile } from "./ProfileProvider";
 import { arenaForSeed, type Arena, type ArenaId } from "@/lib/cosmetics";
 import { stagger, motion as motionTokens } from "@/lib/motion";
@@ -692,15 +693,16 @@ export function DuelArena({ pda }: { pda: string }) {
             <div className="table-actions arena-v2-actions">
               {waiting && !isHost ? (
                 publicKey && profile ? (
-                  <button
-                    className="btn-ember btn-join"
+                  <CoolBtn
+                    variant="join"
+                    pulse={!busy}
                     disabled={busy}
                     onClick={() => void join()}
                   >
                     {busy
                       ? "Matching on-chain…"
                       : `Join & wager ${formatSol(room.wagerLamports)}`}
-                  </button>
+                  </CoolBtn>
                 ) : publicKey ? (
                   <p className="muted">Pick a username to lock your wager.</p>
                 ) : (
@@ -786,24 +788,22 @@ export function DuelArena({ pda }: { pda: string }) {
       {canRematch ? (
         <div className="bd-host-tools">
           {rematchOffer && rematchOffer.hostWallet === me ? (
-            <Link href={`/duel/${rematchOffer.pda}`} className="btn-ember">
-              Go to rematch
-            </Link>
+            <CoolBtn href={`/duel/${rematchOffer.pda}`}>Go to rematch</CoolBtn>
           ) : null}
           {rematchOffer && rematchOffer.hostWallet !== me ? (
             <>
-              <button className="btn-ember" disabled={busy} onClick={() => void joinRematch()}>
+              <CoolBtn disabled={busy} pulse={!busy} onClick={() => void joinRematch()}>
                 {busy ? "Joining…" : `Join rematch · ${formatSol(rematchOffer.wagerLamports)}`}
-              </button>
-              <button className="btn-ghost" disabled={busy} onClick={openRematch}>
+              </CoolBtn>
+              <CoolBtn variant="ghost" disabled={busy} onClick={openRematch}>
                 Different wager
-              </button>
+              </CoolBtn>
             </>
           ) : null}
           {!rematchOffer ? (
-            <button className="btn-ember" disabled={busy} onClick={openRematch}>
+            <CoolBtn disabled={busy} pulse={!busy} onClick={openRematch}>
               Rematch
-            </button>
+            </CoolBtn>
           ) : null}
         </div>
       ) : null}
@@ -843,12 +843,12 @@ export function DuelArena({ pda }: { pda: string }) {
           </div>
           {error ? <p className="err">{error}</p> : null}
           <div className="row-actions">
-            <button className="btn-ghost" disabled={busy} onClick={() => setRematchOpen(false)}>
+            <CoolBtn variant="ghost" disabled={busy} onClick={() => setRematchOpen(false)}>
               Back
-            </button>
-            <button className="btn-ember" disabled={busy} onClick={() => void rematch()}>
+            </CoolBtn>
+            <CoolBtn disabled={busy} pulse={!busy} onClick={() => void rematch()}>
               {busy ? "Opening…" : `Lock ${rematchWager || "—"} SOL`}
-            </button>
+            </CoolBtn>
           </div>
         </div>
       </div>

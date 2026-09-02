@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useProfile } from "./ProfileProvider";
+import { CoolBtn } from "./CoolBtn";
 
 export function IdentityModal() {
   const { profile, save } = useProfile();
@@ -40,13 +41,14 @@ export function IdentityModal() {
           />
         </label>
         {error ? <p className="err">{error}</p> : null}
-        <button
-          className="btn-ember"
+        <CoolBtn
+          fullWidth
+          pulse={!busy}
           disabled={busy || username.trim().length < 2}
           onClick={() => void onSave()}
         >
           {busy ? "Signing…" : "Bind identity"}
-        </button>
+        </CoolBtn>
       </div>
     </div>
   );

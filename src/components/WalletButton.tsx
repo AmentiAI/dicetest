@@ -3,6 +3,7 @@
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { shortKey } from "@/lib/format";
+import { CoolBtn } from "@/components/CoolBtn";
 
 export function WalletButton({ compact = false }: { compact?: boolean }) {
   const { publicKey, disconnect, connected } = useWallet();
@@ -22,11 +23,12 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <button
-      className={`btn-ember ${compact ? "btn-compact" : "w-full"}`}
+    <CoolBtn
+      className={compact ? "btn-compact" : "w-full"}
+      pulse={!compact}
       onClick={() => setVisible(true)}
     >
       Connect Wallet
-    </button>
+    </CoolBtn>
   );
 }

@@ -33,6 +33,8 @@ export function ArenaTable({
     >
       <div className="arena-v2-backdrop" aria-hidden>
         <span className="arena-v2-scene" />
+        <span className="arena-v2-canopy" />
+        <span className="arena-v2-shafts" />
         <span className="arena-v2-ground" />
         <span className="arena-v2-weather" />
         <span className="arena-v2-vignette" />

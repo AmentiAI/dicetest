@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
@@ -9,6 +8,7 @@ import { CubeDie } from "@/components/CubeDie";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { WalletBadge } from "@/components/WalletBadge";
 import { GameIcon } from "@/components/GameIcon";
+import { CoolBtn } from "@/components/CoolBtn";
 import { MiniDie } from "@/components/dashboard/MiniDie";
 import { formatSol, formatUsd, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
@@ -52,7 +52,6 @@ function clampWager(n: number, max: number) {
 }
 
 export function LandingPage() {
-  const router = useRouter();
   const { publicKey } = useWallet();
   const { connection } = useConnection();
   const [stats, setStats] = useState<Stats | null>(null);
@@ -126,11 +125,6 @@ export function LandingPage() {
 
   function setWagerClamped(n: number) {
     setWager(String(clampWager(n, maxBal)));
-  }
-
-  function enterDuel() {
-    const q = wagerValid ? `?wager=${wager}` : "";
-    router.push(`/circles${q}`);
   }
 
   return (
@@ -209,13 +203,17 @@ export function LandingPage() {
               </div>
             </div>
 
-            <button type="button" className="btn-roll" onClick={enterDuel}>
+            <CoolBtn
+              href={wagerValid ? `/circles?wager=${wager}` : "/circles"}
+              className="btn-roll"
+              pulse
+            >
               <GameIcon name="dice" size={22} />
               <span className="btn-roll-text">
                 <strong>ROLL DICE</strong>
                 <small>Enter lobby to match &amp; roll on Solana</small>
               </span>
-            </button>
+            </CoolBtn>
           </div>
         </div>
       </section>
