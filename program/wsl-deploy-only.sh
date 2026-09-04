@@ -4,7 +4,11 @@ export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 set -a
 . /mnt/c/Users/Wilso/dicetest/.env
 set +a
-RPC="https://devnet.helius-rpc.com/?api-key=${NEXT_PUBLIC_HELIUS_API_KEY}"
+RPC="${SOLANA_RPC_URL:-https://api.devnet.solana.com}"
+HELIUS_KEY="${HELIUS_API_KEY:-${NEXT_PUBLIC_HELIUS_API_KEY:-}}"
+if [ -n "$HELIUS_KEY" ]; then
+  RPC="https://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}"
+fi
 SO="/mnt/c/Users/Wilso/dicetest/program/target/deploy/dice_duel.so"
 KEYPAIR="/mnt/c/Users/Wilso/dicetest/program/keys/dice_duel-keypair.json"
 solana config set --url https://api.devnet.solana.com --keypair "$HOME/.config/solana/id.json" >/dev/null

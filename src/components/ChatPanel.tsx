@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { chatAuthMessage } from "@/lib/auth";
+import { bytesToBase64 } from "@/lib/base64";
 import { getJson, postJson } from "@/lib/http";
 
 type Msg = {
@@ -13,9 +15,10 @@ type Msg = {
 };
 
 export function ChatPanel({ roomId }: { roomId: string }) {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,14 +41,30 @@ export function ChatPanel({ roomId }: { roomId: string }) {
 
   async function send() {
     if (!publicKey || !text.trim()) return;
+    if (!signMessage) {
+      setError("This wallet cannot sign messages.");
+      return;
+    }
     const body = text.trim();
+    const wallet = publicKey.toBase58();
+    const ts = Date.now();
     setText("");
-    await postJson(`/api/rooms/${roomId}/chat`, {
-      wallet: publicKey.toBase58(),
-      body,
-    });
-    const json = await getJson<{ messages: Msg[] }>(`/api/rooms/${roomId}/chat`);
-    setMessages(json?.messages ?? []);
+    setError(null);
+    try {
+      const message = chatAuthMessage(roomId, wallet, body, ts);
+      const sig = await signMessage(new TextEncoder().encode(message));
+      await postJson(`/api/rooms/${roomId}/chat`, {
+        wallet,
+        body,
+        ts,
+        signatureBase64: bytesToBase64(new Uint8Array(sig)),
+      });
+      const json = await getJson<{ messages: Msg[] }>(`/api/rooms/${roomId}/chat`);
+      setMessages(json?.messages ?? []);
+    } catch (e) {
+      setText(body);
+      setError(e instanceof Error ? e.message : "Message was not sent.");
+    }
   }
 
   const sys = messages.filter((m) => m.kind === "system");
@@ -99,6 +118,7 @@ export function ChatPanel({ roomId }: { roomId: string }) {
           void send();
         }}
       >
+        {error ? <p className="sys">{error}</p> : null}
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}

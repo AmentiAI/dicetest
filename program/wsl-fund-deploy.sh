@@ -11,7 +11,8 @@ set -a
 # shellcheck disable=SC1091
 . /mnt/c/Users/Wilso/dicetest/.env
 set +a
-HELIUS="https://devnet.helius-rpc.com/?api-key=${NEXT_PUBLIC_HELIUS_API_KEY}"
+HELIUS_KEY="${HELIUS_API_KEY:-${NEXT_PUBLIC_HELIUS_API_KEY:-}}"
+HELIUS="https://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}"
 
 try_airdrop() {
   local amt="$1"

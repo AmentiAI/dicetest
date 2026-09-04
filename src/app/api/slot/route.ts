@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
+import { fail, failInternal } from "@/lib/api";
+import { limitOr429 } from "@/lib/rate-limit";
+import { isPubkeyString } from "@/lib/solana/keys";
 
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   try {
+    const limited = limitOr429(req, "slot", 30);
+    if (limited) return limited;
     const url = new URL(req.url);
     const pda = url.searchParams.get("pda");
+    if (pda && !isPubkeyString(pda)) return fail("invalid room");
+
     const { PublicKey } = await import("@solana/web3.js");
     const { serverConnection } = await import("@/lib/solana/connection");
     const { fetchRevealHash, currentSlot, fetchDuel } = await import(
@@ -77,7 +84,6 @@ export async function GET(req: Request) {
           : onchain.winner.toBase58(),
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "slot lookup failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failInternal("slot", e);
   }
 }

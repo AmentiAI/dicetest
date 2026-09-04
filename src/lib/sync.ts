@@ -3,11 +3,15 @@ import { PublicKey } from "@solana/web3.js";
 import { db } from "./db";
 import { chatMessages, matchEvents, profiles, rooms } from "./db/schema";
 import { fetchDuel } from "./solana/fetch";
+import { isPubkeyString } from "./solana/keys";
 import { serverConnection } from "./solana/connection";
 import { statusName } from "./solana/pda";
 import { hashToHex } from "./solana/dice";
 
 export async function syncRoomFromChain(pda: string, opts?: { force?: boolean }) {
+  if (!isPubkeyString(pda)) {
+    return { room: null, onchain: null };
+  }
   const existing = await db().query.rooms.findFirst({
     where: eq(rooms.id, pda),
   });

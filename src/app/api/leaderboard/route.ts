@@ -1,12 +1,16 @@
 import { desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { failInternal } from "@/lib/api";
+import { limitOr429 } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import { profiles } from "@/lib/db/schema";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const limited = limitOr429(req, "leaderboard", 40);
+    if (limited) return limited;
     const rows = await db()
       .select()
       .from(profiles)
@@ -14,7 +18,6 @@ export async function GET() {
       .limit(50);
     return NextResponse.json({ leaders: rows });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "leaderboard failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failInternal("leaderboard", e);
   }
 }

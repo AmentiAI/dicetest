@@ -32,13 +32,11 @@ function isPublicRpc(url: string) {
   }
 }
 
-export function resolveBrowserRpc() {
-  const explicit = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
-  const helius = process.env.NEXT_PUBLIC_HELIUS_API_KEY;
-  if (helius && (!explicit || isPublicRpc(explicit))) {
-    return heliusUrl(helius);
-  }
-  if (explicit) return explicit;
+function hasEmbeddedApiKey(url: string) {
+  return /api-key=/i.test(url);
+}
+
+function publicClusterRpc() {
   return network() === "mainnet-beta"
     ? "https://api.mainnet-beta.solana.com"
     : network() === "testnet"
@@ -46,16 +44,21 @@ export function resolveBrowserRpc() {
       : "https://api.devnet.solana.com";
 }
 
+export function resolveBrowserRpc() {
+  const explicit = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
+  if (explicit && !hasEmbeddedApiKey(explicit)) return explicit;
+  return publicClusterRpc();
+}
+
 export function resolveServerRpc() {
   const explicit = process.env.SOLANA_RPC_URL;
-  const helius =
-    process.env.HELIUS_API_KEY || process.env.NEXT_PUBLIC_HELIUS_API_KEY;
+  const helius = process.env.HELIUS_API_KEY;
   if (explicit && !isPublicRpc(explicit)) return explicit;
   if (helius) return heliusUrl(helius);
   if (explicit) return explicit;
   const pub = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
-  if (pub && !isPublicRpc(pub)) return pub;
-  return resolveBrowserRpc();
+  if (pub && !hasEmbeddedApiKey(pub) && !isPublicRpc(pub)) return pub;
+  return publicClusterRpc();
 }
 
 export async function rpcFetch(

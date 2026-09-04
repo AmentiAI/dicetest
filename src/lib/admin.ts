@@ -6,10 +6,8 @@ function splitList(raw: string | undefined) {
 }
 
 export function adminAllowlist() {
-  const pub = splitList(process.env.NEXT_PUBLIC_ADMIN_WALLETS);
-  const srv =
-    typeof window === "undefined" ? splitList(process.env.ADMIN_WALLETS) : [];
-  return [...new Set([...pub, ...srv])];
+  if (typeof window !== "undefined") return [];
+  return [...new Set(splitList(process.env.ADMIN_WALLETS))];
 }
 
 export function isAdminWallet(wallet: string | null | undefined) {

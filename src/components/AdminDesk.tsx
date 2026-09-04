@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { adminAuthMessage } from "@/lib/auth";
+import { bytesToBase64 } from "@/lib/base64";
 import { formatSol, shortKey } from "@/lib/format";
-import { getJson } from "@/lib/http";
+import { postJson, requestJson } from "@/lib/http";
 import { explorerAccount, explorerTx } from "@/lib/solana/constants";
 import { WalletButton } from "./WalletButton";
 
@@ -103,7 +105,7 @@ function when(iso: string) {
 }
 
 export function AdminDesk() {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const me = publicKey?.toBase58() ?? null;
   const [data, setData] = useState<AdminPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -117,20 +119,86 @@ export function AdminDesk() {
     if (!me) {
       setData(null);
       setDenied(false);
+      setError(null);
+      return;
+    }
+    if (!signMessage) {
+      setData(null);
+      setDenied(false);
+      setError("This wallet cannot sign messages, so the admin desk cannot authenticate.");
       return;
     }
     let stop = false;
-    const tick = async () => {
-      const json = await getJson<AdminPayload>(`/api/admin?wallet=${encodeURIComponent(me)}`);
-      if (stop) return;
-      if (!json) {
-        setDenied(true);
-        setError("This wallet is not on the admin allowlist, or the feed failed to load.");
-        return;
+    let giveUp = false;
+    let inFlight = false;
+    const storageKey = `bd-admin-session:${me}`;
+
+    const ensureToken = async (force = false) => {
+      if (!force) {
+        const cached = sessionStorage.getItem(storageKey);
+        if (cached) return cached;
       }
-      setDenied(false);
-      setError(null);
-      setData(json);
+      const ts = Date.now();
+      const message = adminAuthMessage(me, ts);
+      const sig = await signMessage(new TextEncoder().encode(message));
+      const json = await postJson<{ token: string }>("/api/admin", {
+        wallet: me,
+        ts,
+        signatureBase64: bytesToBase64(new Uint8Array(sig)),
+      });
+      sessionStorage.setItem(storageKey, json.token);
+      return json.token;
+    };
+
+    const tick = async () => {
+      if (giveUp || inFlight) return;
+      inFlight = true;
+      try {
+        let token = await ensureToken();
+        if (stop) return;
+        let { status: httpStatus, json } = await requestJson<AdminPayload>("GET", "/api/admin", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (stop) return;
+        if (httpStatus === 401) {
+          sessionStorage.removeItem(storageKey);
+          token = await ensureToken(true);
+          if (stop) return;
+          ({ status: httpStatus, json } = await requestJson<AdminPayload>("GET", "/api/admin", {
+            headers: { Authorization: `Bearer ${token}` },
+          }));
+        }
+        if (httpStatus === 403) {
+          giveUp = true;
+          setDenied(true);
+          setError("This wallet is not on the server admin allowlist.");
+          return;
+        }
+        if (httpStatus === 503) {
+          giveUp = true;
+          setError("Admin is not configured. Set ADMIN_WALLETS on the server.");
+          return;
+        }
+        if (!json || httpStatus >= 300) {
+          setError(json?.error || "The admin feed failed to load.");
+          return;
+        }
+        setDenied(false);
+        setError(null);
+        setData(json);
+      } catch (e) {
+        if (stop) return;
+        giveUp = true;
+        const message = e instanceof Error ? e.message : "Admin authentication failed.";
+        if (/forbidden/i.test(message)) {
+          setDenied(true);
+          setError("This wallet is not on the server admin allowlist.");
+          return;
+        }
+        setError(message);
+      } finally {
+        inFlight = false;
+      }
     };
     void tick();
     const t = setInterval(() => void tick(), 8_000);
@@ -138,7 +206,7 @@ export function AdminDesk() {
       stop = true;
       clearInterval(t);
     };
-  }, [me]);
+  }, [me, signMessage]);
 
   const needle = q.trim().toLowerCase();
 
@@ -222,9 +290,9 @@ export function AdminDesk() {
         <p className="kicker">Staff</p>
         <h1>Locked</h1>
         <p className="muted">
-          {shortKey(me)} is not on the admin allowlist. Set{" "}
-          <code>NEXT_PUBLIC_ADMIN_WALLETS</code> (and <code>ADMIN_WALLETS</code> on
-          the server) to a comma-separated list of pubkeys.
+          {shortKey(me)} is not on the server admin allowlist. Set{" "}
+          <code>ADMIN_WALLETS</code> to a comma-separated list of pubkeys. Do not
+          put that list in any <code>NEXT_PUBLIC_</code> variable.
         </p>
       </div>
     );

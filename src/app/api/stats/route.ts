@@ -1,6 +1,8 @@
 import type { Connection, PublicKey } from "@solana/web3.js";
 import { count, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { failInternal } from "@/lib/api";
+import { limitOr429 } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import { profiles, rooms } from "@/lib/db/schema";
 
@@ -20,8 +22,10 @@ async function programDeployedCached(connection: Connection, programId: PublicKe
   return deployed;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const limited = limitOr429(req, "stats", 60);
+    if (limited) return limited;
     const [waiting, locked, settled, players, potRows] = await Promise.all([
       db().select({ n: count() }).from(rooms).where(eq(rooms.status, "waiting")),
       db().select({ n: count() }).from(rooms).where(eq(rooms.status, "locked")),
@@ -65,7 +69,6 @@ export async function GET() {
       rpc,
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "stats failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failInternal("stats", e);
   }
 }

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { failInternal } from "@/lib/api";
+import { limitOr429 } from "@/lib/rate-limit";
 
 let cached: { at: number; usd: number | null; source: string } = {
   at: 0,
@@ -30,16 +32,22 @@ async function fromCoinGecko(): Promise<number | null> {
   return typeof n === "number" ? n : null;
 }
 
-export async function GET() {
-  if (Date.now() - cached.at < 30_000 && cached.usd != null) {
+export async function GET(req: Request) {
+  try {
+    const limited = limitOr429(req, "price", 40);
+    if (limited) return limited;
+    if (Date.now() - cached.at < 30_000 && cached.usd != null) {
+      return NextResponse.json(cached);
+    }
+    let usd = await fromJupiter();
+    let source = "jupiter";
+    if (usd == null) {
+      usd = await fromCoinGecko();
+      source = "coingecko";
+    }
+    cached = { at: Date.now(), usd, source };
     return NextResponse.json(cached);
+  } catch (e) {
+    return failInternal("price", e);
   }
-  let usd = await fromJupiter();
-  let source = "jupiter";
-  if (usd == null) {
-    usd = await fromCoinGecko();
-    source = "coingecko";
-  }
-  cached = { at: Date.now(), usd, source };
-  return NextResponse.json(cached);
 }

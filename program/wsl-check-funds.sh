@@ -5,8 +5,9 @@ set -a
 . /mnt/c/Users/Wilso/dicetest/.env
 set +a
 RPC="${SOLANA_RPC_URL:-https://api.devnet.solana.com}"
-if [ -n "${NEXT_PUBLIC_HELIUS_API_KEY:-}" ]; then
-  RPC="https://devnet.helius-rpc.com/?api-key=${NEXT_PUBLIC_HELIUS_API_KEY}"
+HELIUS_KEY="${HELIUS_API_KEY:-${NEXT_PUBLIC_HELIUS_API_KEY:-}}"
+if [ -n "$HELIUS_KEY" ]; then
+  RPC="https://devnet.helius-rpc.com/?api-key=${HELIUS_KEY}"
 fi
 USER="9EAhmDdXUKfo2ae4Tx3PPj5Cv17VF5oxjtBaU6FJeSNT"
 DEPLOYER="$(solana-keygen pubkey "$HOME/.config/solana/id.json")"
