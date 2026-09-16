@@ -9,14 +9,19 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
 
   if (connected && address) {
     return (
-      <button
-        className="wallet-chip"
-        onClick={() => disconnect()}
-        title="Disconnect"
-      >
-        <span className="pulse-dot" />
-        {shortKey(address, 4, 4)}
-      </button>
+      <div className="wallet-session">
+        <span className="wallet-chip" title={address}>
+          <span className="pulse-dot" />
+          {shortKey(address, 4, 4)}
+        </span>
+        <button
+          type="button"
+          className="wallet-disconnect"
+          onClick={() => void disconnect()}
+        >
+          Disconnect
+        </button>
+      </div>
     );
   }
 
@@ -26,7 +31,7 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
       pulse={!compact}
       onClick={() => openConnectModal()}
     >
-      Connect ETH / Robinhood
+      {compact ? "Connect wallet" : "Connect ETH / Robinhood"}
     </CoolBtn>
   );
 }

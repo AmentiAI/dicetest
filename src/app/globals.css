@@ -716,6 +716,26 @@ a.btn-ember:hover {
   border-radius: 8px;
   width: auto;
 }
+.wallet-session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wallet-disconnect {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wallet-disconnect:hover {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #fecaca;
+}
 
 .pulse-dot {
   width: 8px;
@@ -1012,7 +1032,7 @@ code {
   background: rgba(0, 0, 0, 0.82);
   display: grid;
   place-items: center;
-  z-index: 40;
+  z-index: 80;
   padding: 20px;
   animation: fade-in 0.25s ease both;
 }
