@@ -60,7 +60,7 @@ export function ArenaTable({
       <div className="arena-v2-table">
         <div className={`hash-pad arena-v2-pad${hot ? " is-pulsing" : ""}`} aria-hidden>
           <span className="hash-ring" />
-          <span className="hash-glyph">S</span>
+          <span className="hash-glyph">Ξ</span>
         </div>
         {children}
       </div>

@@ -1,15 +1,14 @@
 import { eq, sql } from "drizzle-orm";
-import { PublicKey } from "@solana/web3.js";
 import { db } from "./db";
 import { chatMessages, matchEvents, profiles, rooms } from "./db/schema";
-import { fetchDuel } from "./solana/fetch";
-import { isPubkeyString } from "./solana/keys";
-import { serverConnection } from "./solana/connection";
-import { statusName } from "./solana/pda";
-import { hashToHex } from "./solana/dice";
+import { publicClient } from "./eth/client";
+import { fetchDuel, statusName } from "./eth/fetch";
+import { hashToHex } from "./eth/dice";
+import { isU256String } from "./eth/keys";
+import { zeroAddress } from "viem";
 
 export async function syncRoomFromChain(pda: string, opts?: { force?: boolean }) {
-  if (!isPubkeyString(pda)) {
+  if (!isU256String(pda)) {
     return { room: null, onchain: null };
   }
   const existing = await db().query.rooms.findFirst({
@@ -20,14 +19,13 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
     existing &&
     (existing.status === "settled" ||
       existing.status === "cancelled" ||
-      existing.status === "refunded" ||
-      existing.status === "waiting");
+      existing.status === "refunded");
   if (skipChain) {
     return { room: existing, onchain: null };
   }
 
-  const connection = serverConnection();
-  const onchain = await fetchDuel(connection, new PublicKey(pda));
+  const client = publicClient();
+  const onchain = await fetchDuel(client, pda);
   if (!onchain) {
     if (existing && existing.status === "waiting") {
       await db()
@@ -39,23 +37,30 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
   }
 
   const nextStatus = statusName(onchain.status);
-  const challenger = onchain.challenger.equals(PublicKey.default)
-    ? null
-    : onchain.challenger.toBase58();
-  const winner = onchain.winner.equals(PublicKey.default)
-    ? null
-    : onchain.winner.toBase58();
+  const challenger =
+    onchain.challenger.toLowerCase() === zeroAddress
+      ? null
+      : onchain.challenger.toLowerCase();
+  const winner =
+    onchain.winner.toLowerCase() === zeroAddress
+      ? null
+      : onchain.winner.toLowerCase();
 
   const patch = {
     status: nextStatus,
     challengerWallet: challenger,
-    commitSlot: onchain.commitSlot === 0n ? null : onchain.commitSlot.toString(),
-    revealSlot: onchain.revealSlot === 0n ? null : onchain.revealSlot.toString(),
+    commitSlot: onchain.commitBlock === 0n ? null : onchain.commitBlock.toString(),
+    revealSlot: onchain.revealBlock === 0n ? null : onchain.revealBlock.toString(),
     hostRoll: onchain.hostRoll || null,
     challengerRoll: onchain.challengerRoll || null,
     winnerWallet: winner,
     slotHash:
-      onchain.slotHash.some((b) => b !== 0) ? hashToHex(onchain.slotHash) : null,
+      onchain.entropy && onchain.entropy !== "0x" + "00".repeat(32)
+        ? hashToHex(onchain.entropy)
+        : null,
+    hostNftId: onchain.hostTokenId > 0n ? onchain.hostTokenId.toString() : null,
+    challengerNftId:
+      onchain.challengerTokenId > 0n ? onchain.challengerTokenId.toString() : null,
     updatedAt: new Date(),
   };
 
@@ -64,15 +69,14 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
   }
 
   if (existing && existing.status !== "settled" && nextStatus === "settled" && winner) {
-    const loser =
-      winner === onchain.host.toBase58()
-        ? onchain.challenger.toBase58()
-        : onchain.host.toBase58();
+    const host = onchain.host.toLowerCase();
+    const chal = onchain.challenger.toLowerCase();
+    const loser = winner === host ? chal : host;
     await db()
       .update(profiles)
       .set({
         wins: sql`${profiles.wins} + 1`,
-        volumeLamports: sql`(${profiles.volumeLamports}::numeric + ${onchain.wagerLamports.toString()}::numeric)::text`,
+        volumeLamports: sql`(${profiles.volumeLamports}::numeric + ${onchain.wagerWei.toString()}::numeric)::text`,
         updatedAt: new Date(),
       })
       .where(eq(profiles.wallet, winner));
@@ -80,7 +84,7 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
       .update(profiles)
       .set({
         losses: sql`${profiles.losses} + 1`,
-        volumeLamports: sql`(${profiles.volumeLamports}::numeric + ${onchain.wagerLamports.toString()}::numeric)::text`,
+        volumeLamports: sql`(${profiles.volumeLamports}::numeric + ${onchain.wagerWei.toString()}::numeric)::text`,
         updatedAt: new Date(),
       })
       .where(eq(profiles.wallet, loser));
@@ -91,9 +95,9 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
         winner,
         hostRoll: onchain.hostRoll,
         challengerRoll: onchain.challengerRoll,
-        slotHash: hashToHex(onchain.slotHash),
-        revealSlot: onchain.revealSlot.toString(),
-        pot: (onchain.wagerLamports * 2n).toString(),
+        slotHash: hashToHex(onchain.entropy),
+        revealSlot: onchain.revealBlock.toString(),
+        pot: (onchain.wagerWei * 2n).toString(),
       },
     });
     await db().insert(chatMessages).values({
@@ -101,7 +105,7 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
       wallet: "system",
       username: "SYS",
       kind: "system",
-      body: `Settled on slot ${onchain.revealSlot.toString()}. ${winner.slice(0, 4)}… wins the pot. No house cut.`,
+      body: `Settled on block ${onchain.revealBlock.toString()}. ${winner.slice(0, 6)}… wins the pot. No house cut.`,
     });
   }
 

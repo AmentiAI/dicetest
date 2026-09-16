@@ -2,17 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useAccount, useBalance } from "wagmi";
 import { CubeDie } from "@/components/CubeDie";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { WalletBadge } from "@/components/WalletBadge";
 import { GameIcon } from "@/components/GameIcon";
 import { CoolBtn } from "@/components/CoolBtn";
 import { MiniDie } from "@/components/dashboard/MiniDie";
-import { formatSol, formatUsd, shortKey } from "@/lib/format";
+import { formatEth, formatUsd, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
-import { MAX_WAGER_SOL, MIN_WAGER_SOL } from "@/lib/solana/constants";
+import { MAX_WAGER_ETH, MIN_WAGER_ETH } from "@/lib/eth/constants";
 import type { GlassDieTone } from "@/lib/cosmetics";
 
 type Stats = {
@@ -40,20 +39,20 @@ type RoomRow = {
 const HERO_DICE: GlassDieTone[] = ["glass-purple", "glass-green", "glass-orange"];
 
 const PREVIEW_ROLLS = [
-  { name: "Nova", bet: "1.20 SOL", usd: "$214.80", a: 6, b: 5, profit: "+1.20 SOL", win: true },
-  { name: "Kite", bet: "0.50 SOL", usd: "$89.50", a: 2, b: 4, profit: "-0.50 SOL", win: false },
-  { name: "Riven", bet: "2.00 SOL", usd: "$358.00", a: 5, b: 3, profit: "+2.00 SOL", win: true },
-  { name: "Ash", bet: "0.25 SOL", usd: "$44.75", a: 1, b: 6, profit: "-0.25 SOL", win: false },
-  { name: "Lux", bet: "0.80 SOL", usd: "$143.20", a: 5, b: 2, profit: "+0.80 SOL", win: true },
+  { name: "Nova", bet: "1.20 ETH", usd: "$214.80", a: 6, b: 5, profit: "+1.20 ETH", win: true },
+  { name: "Kite", bet: "0.50 ETH", usd: "$89.50", a: 2, b: 4, profit: "-0.50 ETH", win: false },
+  { name: "Riven", bet: "2.00 ETH", usd: "$358.00", a: 5, b: 3, profit: "+2.00 ETH", win: true },
+  { name: "Ash", bet: "0.25 ETH", usd: "$44.75", a: 1, b: 6, profit: "-0.25 ETH", win: false },
+  { name: "Lux", bet: "0.80 ETH", usd: "$143.20", a: 5, b: 2, profit: "+0.80 ETH", win: true },
 ];
 
 function clampWager(n: number, max: number) {
-  return Math.min(MAX_WAGER_SOL, Math.max(MIN_WAGER_SOL, n));
+  return Math.min(MAX_WAGER_ETH, Math.max(MIN_WAGER_ETH, n));
 }
 
 export function LandingPage() {
-  const { publicKey } = useWallet();
-  const { connection } = useConnection();
+  const { address } = useAccount();
+  const { data: bal } = useBalance({ address });
   const [stats, setStats] = useState<Stats | null>(null);
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [price, setPrice] = useState<number | null>(null);
@@ -82,18 +81,8 @@ export function LandingPage() {
   }, []);
 
   useEffect(() => {
-    if (!publicKey) {
-      setBalance(null);
-      return;
-    }
-    let stop = false;
-    void connection.getBalance(publicKey, "confirmed").then((lamports) => {
-      if (!stop) setBalance(lamports / LAMPORTS_PER_SOL);
-    });
-    return () => {
-      stop = true;
-    };
-  }, [publicKey, connection]);
+    setBalance(bal ? Number(bal.formatted) : null);
+  }, [bal]);
 
   const settled = useMemo(
     () => rooms.filter((r) => r.status === "settled").slice(0, 12),
@@ -120,8 +109,8 @@ export function LandingPage() {
   }, [rooms]);
 
   const wagerNum = Number(wager);
-  const wagerValid = Number.isFinite(wagerNum) && wagerNum >= MIN_WAGER_SOL;
-  const maxBal = balance ?? MAX_WAGER_SOL;
+  const wagerValid = Number.isFinite(wagerNum) && wagerNum >= MIN_WAGER_ETH;
+  const maxBal = balance ?? MAX_WAGER_ETH;
 
   function setWagerClamped(n: number) {
     setWager(String(clampWager(n, maxBal)));
@@ -149,7 +138,9 @@ export function LandingPage() {
               ROLL THE <span className="dash-gradient-text">BLOCK</span>
             </h1>
             <p className="dash-hero-sub">
-              Roll 2 dice on Solana. Higher roll wins — winner takes the full pot.
+              Connect MetaMask, Rainbow, Coinbase, or Robinhood. Equip a Block
+              Dice NFT as your character. Bet ETH, the NFT, or both — higher
+              roll takes the pot.
             </p>
 
             <div className="dash-bet-block">
@@ -157,12 +148,12 @@ export function LandingPage() {
                 <span>Bet amount</span>
                 <div className="dash-bet-input-wrap">
                   <span className="dash-sol-icon">
-                    <GameIcon name="sol" size={18} />
+                    <GameIcon name="eth" size={18} />
                   </span>
                   <input
                     type="number"
-                    min={MIN_WAGER_SOL}
-                    max={MAX_WAGER_SOL}
+                    min={MIN_WAGER_ETH}
+                    max={MAX_WAGER_ETH}
                     step="0.001"
                     value={wager}
                     onChange={(e) => setWager(e.target.value)}
@@ -173,7 +164,7 @@ export function LandingPage() {
                 </div>
                 <div className="dash-quick-btns">
                   {[
-                    { label: "Min", fn: () => setWagerClamped(MIN_WAGER_SOL) },
+                    { label: "Min", fn: () => setWagerClamped(MIN_WAGER_ETH) },
                     { label: "½", fn: () => setWagerClamped(wagerNum / 2) },
                     { label: "2×", fn: () => setWagerClamped(wagerNum * 2) },
                     { label: "Max", fn: () => setWagerClamped(maxBal) },
@@ -211,7 +202,7 @@ export function LandingPage() {
               <GameIcon name="dice" size={22} />
               <span className="btn-roll-text">
                 <strong>ROLL DICE</strong>
-                <small>Enter lobby to match &amp; roll on Solana</small>
+                <small>Enter lobby to match &amp; roll on Ethereum</small>
               </span>
             </CoolBtn>
           </div>
@@ -224,13 +215,13 @@ export function LandingPage() {
             label: "Total wagered",
             value: totals.wagered,
             icon: "purple",
-            sub: price ? formatUsd(Number(totals.wagered) / 1e9, price) : null,
+            sub: price ? formatUsd(Number(totals.wagered) / 1e18, price) : null,
           },
           {
             label: "Total paid out",
             value: totals.paid,
             icon: "green",
-            sub: price ? formatUsd(Number(totals.paid) / 1e9, price) : null,
+            sub: price ? formatUsd(Number(totals.paid) / 1e18, price) : null,
           },
           {
             label: "Total players",
@@ -259,9 +250,9 @@ export function LandingPage() {
               ) : typeof s.value === "number" ? (
                 <AnimatedNumber value={s.value} format={(n) => String(Math.round(n))} />
               ) : Number(s.value) === 0 ? (
-                "0.00 SOL"
+                "0.00 ETH"
               ) : (
-                `${(Number(s.value) / 1e9).toFixed(2)} SOL`
+                `${(Number(s.value) / 1e18).toFixed(2)} ETH`
               )}
             </p>
             <p className="dash-stat-sub">{s.sub ?? "\u00a0"}</p>
@@ -347,9 +338,9 @@ export function LandingPage() {
                         </div>
                       </td>
                       <td>
-                        <strong>{formatSol(r.wagerLamports)}</strong>
+                        <strong>{formatEth(r.wagerLamports)}</strong>
                         <span className="cell-sub">
-                          {formatUsd(Number(r.wagerLamports) / 1e9, price)}
+                          {formatUsd(Number(r.wagerLamports) / 1e18, price)}
                         </span>
                       </td>
                       <td>
@@ -363,7 +354,7 @@ export function LandingPage() {
                       </td>
                       <td className="payout-cell">2.00×</td>
                       <td className="profit-win">
-                        +{formatSol(profit.toString())}
+                        +{formatEth(profit.toString())}
                       </td>
                     </tr>
                   );

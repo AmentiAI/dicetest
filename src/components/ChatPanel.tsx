@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { chatAuthMessage } from "@/lib/auth";
-import { bytesToBase64 } from "@/lib/base64";
 import { getJson, postJson } from "@/lib/http";
+import { useEthWallet } from "@/lib/eth/wallet";
 
 type Msg = {
   id: number;
@@ -15,7 +14,7 @@ type Msg = {
 };
 
 export function ChatPanel({ roomId }: { roomId: string }) {
-  const { publicKey, signMessage } = useWallet();
+  const { address, signMessage } = useEthWallet();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -40,24 +39,19 @@ export function ChatPanel({ roomId }: { roomId: string }) {
   }, [messages.length]);
 
   async function send() {
-    if (!publicKey || !text.trim()) return;
-    if (!signMessage) {
-      setError("This wallet cannot sign messages.");
-      return;
-    }
+    if (!address || !text.trim()) return;
     const body = text.trim();
-    const wallet = publicKey.toBase58();
     const ts = Date.now();
     setText("");
     setError(null);
     try {
-      const message = chatAuthMessage(roomId, wallet, body, ts);
-      const sig = await signMessage(new TextEncoder().encode(message));
+      const message = chatAuthMessage(roomId, address, body, ts);
+      const sig = await signMessage(message);
       await postJson(`/api/rooms/${roomId}/chat`, {
-        wallet,
+        wallet: address,
         body,
         ts,
-        signatureBase64: bytesToBase64(new Uint8Array(sig)),
+        signatureBase64: sig,
       });
       const json = await getJson<{ messages: Msg[] }>(`/api/rooms/${roomId}/chat`);
       setMessages(json?.messages ?? []);
@@ -69,7 +63,7 @@ export function ChatPanel({ roomId }: { roomId: string }) {
 
   const sys = messages.filter((m) => m.kind === "system");
   const chat = messages.filter((m) => m.kind !== "system");
-  const online = new Set(chat.map((m) => m.wallet)).size || (publicKey ? 1 : 0);
+  const online = new Set(chat.map((m) => m.wallet)).size || (address ? 1 : 0);
 
   return (
     <aside className="bd-chat">

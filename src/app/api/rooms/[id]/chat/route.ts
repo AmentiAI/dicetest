@@ -9,7 +9,7 @@ import {
 import { db } from "@/lib/db";
 import { chatMessages, profiles, rooms } from "@/lib/db/schema";
 import { allow, consumeNonce, limitOr429 } from "@/lib/rate-limit";
-import { isPubkeyString } from "@/lib/solana/keys";
+import { isEthAddress, isU256String, normalizeAddress } from "@/lib/eth/keys";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -18,7 +18,7 @@ export async function GET(req: Request, ctx: Ctx) {
     const limited = limitOr429(req, "chat-get", 60);
     if (limited) return limited;
     const { id } = await ctx.params;
-    if (!isPubkeyString(id)) return fail("invalid room");
+    if (!isU256String(id)) return fail("invalid room");
     const messages = await db()
       .select()
       .from(chatMessages)
@@ -36,7 +36,7 @@ export async function POST(req: Request, ctx: Ctx) {
     const limited = limitOr429(req, "chat-post", 20);
     if (limited) return limited;
     const { id } = await ctx.params;
-    if (!isPubkeyString(id)) return fail("invalid room");
+    if (!isU256String(id)) return fail("invalid room");
 
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== "object") return fail("invalid json body");
@@ -47,36 +47,38 @@ export async function POST(req: Request, ctx: Ctx) {
       (body as { signatureBase64?: unknown }).signatureBase64 ?? "",
     );
     const ts = parseAuthTimestamp((body as { ts?: unknown }).ts);
-    if (!isPubkeyString(wallet) || !text || !ts) {
+    if (!isEthAddress(wallet) || !text || !ts) {
       return fail("wallet, body, and fresh timestamp required");
     }
-    if (!allow(`chat-wallet:${wallet}`, 12)) {
+    const walletNorm = normalizeAddress(wallet);
+    if (!allow(`chat-wallet:${walletNorm}`, 12)) {
       return fail("too many requests", 429);
     }
 
     const room = await db().query.rooms.findFirst({ where: eq(rooms.id, id) });
     if (!room) return fail("room not found", 404);
     const allowed =
-      wallet === room.hostWallet || wallet === room.challengerWallet;
+      walletNorm === room.hostWallet.toLowerCase() ||
+      walletNorm === room.challengerWallet?.toLowerCase();
     if (!allowed) return fail("only duelists can chat", 403);
 
     const message = chatAuthMessage(id, wallet, text, ts);
-    if (!verifyWalletSignature({ wallet, message, signatureBase64 })) {
+    if (!(await verifyWalletSignature({ wallet, message, signatureBase64 }))) {
       return fail("invalid wallet signature", 401);
     }
-    if (!consumeNonce(`chat:${wallet}:${id}:${ts}:${text}`)) {
+    if (!consumeNonce(`chat:${walletNorm}:${id}:${ts}:${text}`)) {
       return fail("replayed signature", 401);
     }
 
     const profile = await db().query.profiles.findFirst({
-      where: eq(profiles.wallet, wallet),
+      where: eq(profiles.wallet, walletNorm),
     });
     const [row] = await db()
       .insert(chatMessages)
       .values({
         roomId: id,
-        wallet,
-        username: profile?.username ?? wallet.slice(0, 4),
+        wallet: walletNorm,
+        username: profile?.username ?? walletNorm.slice(0, 6),
         body: text,
         kind: "chat",
       })

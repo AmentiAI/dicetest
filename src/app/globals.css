@@ -4758,7 +4758,7 @@ body {
 .dash-sidebar-foot {
   font-size: 11px;
   color: #475569;
-  margin: 0;
+  margin: auto 0 0;
 }
 .dash-main {
   padding: 24px;
@@ -6316,3 +6316,407 @@ a.btn-ember:hover { color: #fff; }
 .dash-nav-item:hover {
   background: rgba(139, 92, 246, 0.1);
 }
+
+.nft-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.nft-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.nft-pick img {
+  border-radius: 6px;
+}
+.nft-pick.is-on {
+  border-color: var(--ember);
+  box-shadow: 0 0 0 1px var(--ember);
+}
+.nft-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--mist);
+}
+.nft-badge img {
+  border-radius: 4px;
+}
+.nft-badge.is-staked em {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ember);
+}
+
+.nav-lock {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mist);
+  font-style: normal;
+}
+.dash-nav-item.is-locked:hover {
+  color: #94a3b8;
+  background: transparent;
+}
+
+.waitlist-hero {
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.waitlist-copy {
+  min-width: 0;
+  max-width: 380px;
+  position: relative;
+  z-index: 1;
+}
+.waitlist-play {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: grid;
+  gap: 10px;
+  max-width: 380px;
+}
+.waitlist-play li {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.waitlist-play strong {
+  display: block;
+  color: #f1f5f9;
+  margin-bottom: 2px;
+  font-size: 15px;
+}
+.waitlist-meter {
+  margin: 18px 0 22px;
+  max-width: 380px;
+}
+.waitlist-meter-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.waitlist-meter-top strong {
+  font-size: 28px;
+}
+.waitlist-meter-top em {
+  margin-left: auto;
+  font-style: normal;
+  color: var(--ember);
+}
+.waitlist-bar {
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.waitlist-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #5af0ff, #a855f7);
+}
+.waitlist-form {
+  display: grid;
+  gap: 12px;
+  max-width: 380px;
+}
+.waitlist-pass h2 {
+  margin: 4px 0 8px;
+}
+
+.nft-reel {
+  margin: 0;
+  padding: 4px 0 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.waitlist-hero .nft-reel {
+  position: relative;
+  z-index: 1;
+  justify-self: stretch;
+  width: 100%;
+  min-width: 0;
+}
+.nft-reel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+.nft-reel-head h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+.nft-reel-head .muted {
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+.nft-reel-range {
+  font-family: var(--font-mono);
+  color: var(--mist);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.nft-rarity-key {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 0;
+  margin: 0 0 10px;
+}
+.nft-rarity-key li {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rarity);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.nft-rarity-key li::before {
+  content: "?";
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 11px;
+}
+.nft-reel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  width: 100%;
+}
+.nft-mystery {
+  --rarity: #94a3b8;
+  --aura: rgba(148, 163, 184, 0.28);
+  position: relative;
+  min-height: 0;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  overflow: hidden;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid color-mix(in srgb, var(--rarity) 55%, transparent);
+  box-shadow:
+    0 0 14px var(--aura),
+    inset 0 0 18px var(--aura);
+}
+.nft-mystery.is-empty {
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.nft-mystery .slow-die {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  filter: blur(14px);
+  background: none;
+}
+.nft-mystery .slow-die .scene,
+.nft-mystery .slow-die .cube {
+  width: var(--size) !important;
+  height: var(--size) !important;
+  max-width: none;
+  margin: 0;
+}
+.nft-mystery .cube,
+.nft-mystery .shadow {
+  animation-duration: 24s;
+  animation-delay: 0s;
+  animation-timing-function: linear;
+}
+.nft-mystery-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 10, 16, 0.28);
+  pointer-events: none;
+}
+.nft-mystery-veil span {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--rarity);
+  text-shadow:
+    0 0 8px var(--aura),
+    0 6px 16px rgba(0, 0, 0, 0.55);
+  opacity: 0.96;
+}
+.rarity-common { --rarity: #94a3b8; --aura: rgba(148, 163, 184, 0.32); }
+.rarity-uncommon { --rarity: #4ade80; --aura: rgba(74, 222, 128, 0.42); }
+.rarity-rare { --rarity: #60a5fa; --aura: rgba(96, 165, 250, 0.5); }
+.rarity-epic { --rarity: #c084fc; --aura: rgba(192, 132, 252, 0.58); }
+.rarity-legendary { --rarity: #fbbf24; --aura: rgba(251, 191, 36, 0.7); }
+.nft-mystery.rarity-epic,
+.nft-mystery.rarity-legendary {
+  animation: nftAura 2.6s ease-in-out infinite;
+}
+@keyframes nftAura {
+  0%, 100% {
+    box-shadow: 0 0 14px var(--aura), inset 0 0 22px var(--aura);
+  }
+  50% {
+    box-shadow: 0 0 32px var(--aura), inset 0 0 36px var(--aura);
+  }
+}
+.nft-reel-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+@media (max-width: 1100px) {
+  .waitlist-hero {
+    grid-template-columns: 1fr;
+  }
+  .waitlist-copy,
+  .waitlist-play,
+  .waitlist-meter,
+  .waitlist-form {
+    max-width: 420px;
+  }
+}
+@media (max-width: 640px) {
+  .nft-reel-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fair-page {
+  max-width: 760px;
+}
+.fair-lead {
+  font-size: 17px;
+  line-height: 1.65;
+  color: #cbd5e1;
+  margin: 0 0 22px;
+}
+.fair-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 22px;
+  display: grid;
+  gap: 10px;
+}
+.fair-steps li {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px 14px 52px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
+  color: #94a3b8;
+}
+.fair-steps li::before {
+  counter-increment: fair-step;
+  content: counter(fair-step);
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(139, 92, 246, 0.28);
+}
+.fair-steps {
+  counter-reset: fair-step;
+}
+.fair-steps strong {
+  color: #f1f5f9;
+  font-size: 15px;
+}
+.fair-steps span {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.fair-callouts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.fair-callouts article {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(16, 20, 32, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.fair-callouts h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.fair-callouts p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.fair-recipe {
+  margin: 8px 0 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.2);
+}
+.fair-recipe summary {
+  cursor: pointer;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+.fair-recipe .muted {
+  margin: 10px 0 12px;
+}
+.fair-meta {
+  font-size: 13px;
+  word-break: break-all;
+}
+.fair-meta a {
+  color: #a78bfa;
+}
+@media (max-width: 900px) {
+  .fair-callouts {
+    grid-template-columns: 1fr;
+  }
+}
+

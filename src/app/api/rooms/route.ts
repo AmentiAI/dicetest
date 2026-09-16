@@ -6,8 +6,12 @@ import { parseArenaId } from "@/lib/cosmetics";
 import { db } from "@/lib/db";
 import { chatMessages, matchEvents, profiles, rooms } from "@/lib/db/schema";
 import { limitOr429 } from "@/lib/rate-limit";
-import { isPubkeyString, isTxSignature, isU64String } from "@/lib/solana/keys";
-import { proofError, verifyProgramTx } from "@/lib/solana/verify-tx";
+import { DUEL_ADDRESS } from "@/lib/eth/constants";
+import { publicClient } from "@/lib/eth/client";
+import { fetchDuel, statusName } from "@/lib/eth/fetch";
+import { isEthAddress, isTxHash, isU256String, normalizeAddress } from "@/lib/eth/keys";
+import { proofError, verifyProgramTx } from "@/lib/eth/verify-tx";
+import { PLAY_LOCKED } from "@/lib/waitlist";
 
 export const runtime = "nodejs";
 
@@ -72,6 +76,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    if (PLAY_LOCKED) return fail("play is locked", 403);
     const limited = limitOr429(req, "rooms-create", 12);
     if (limited) return limited;
     const body = await req.json().catch(() => null);
@@ -91,37 +96,30 @@ export async function POST(req: Request) {
     if (!pda || !duelId || !hostWallet || !wagerLamports || !createSignature) {
       return fail("missing fields");
     }
-    if (!isPubkeyString(pda) || !isPubkeyString(hostWallet) || !isU64String(duelId)) {
+    if (!isU256String(pda) || pda !== duelId || !isEthAddress(hostWallet) || !isU256String(duelId)) {
       return fail("invalid duel identifiers");
     }
-    if (!isTxSignature(createSignature)) return fail("invalid create signature");
-    if (rematchOf && !isPubkeyString(rematchOf)) return fail("invalid rematch room");
+    if (!isTxHash(createSignature)) return fail("invalid create signature");
+    if (rematchOf && !isU256String(rematchOf)) return fail("invalid rematch room");
+    const host = normalizeAddress(hostWallet);
 
     const existing = await db().query.rooms.findFirst({ where: eq(rooms.id, pda) });
     if (existing) {
       return NextResponse.json({ room: existing });
     }
 
-    const { PublicKey } = await import("@solana/web3.js");
-    const { fetchDuel } = await import("@/lib/solana/fetch");
-    const { serverConnection } = await import("@/lib/solana/connection");
-    const { PROGRAM_ID } = await import("@/lib/solana/constants");
-    const { statusName } = await import("@/lib/solana/pda");
-    const connection = serverConnection();
-    const proof = await verifyProgramTx({ connection, signature: createSignature, pda });
+    const client = publicClient();
+    const proof = await verifyProgramTx({ client, signature: createSignature, pda });
     if (proof !== "ok") {
       const { error, status } = proofError(proof);
       return fail(error, status);
     }
-    const onchain = await fetchDuel(connection, new PublicKey(pda));
+    const onchain = await fetchDuel(client, pda);
     if (!onchain) {
       return fail("duel account not found on chain — wait for confirmation and retry");
     }
-    if (onchain.host.toBase58() !== hostWallet) {
+    if (onchain.host.toLowerCase() !== host) {
       return fail("host mismatch");
-    }
-    if (onchain.duelId.toString() !== duelId) {
-      return fail("duel id mismatch");
     }
 
     await db()
@@ -129,8 +127,9 @@ export async function POST(req: Request) {
       .values({
         id: pda,
         duelId,
-        hostWallet,
-        wagerLamports: onchain.wagerLamports.toString(),
+        hostWallet: host,
+        wagerLamports: onchain.wagerWei.toString(),
+        hostNftId: onchain.hostTokenId > 0n ? onchain.hostTokenId.toString() : null,
         status: statusName(onchain.status),
         createSignature,
       })
@@ -154,10 +153,11 @@ export async function POST(req: Request) {
         roomId: pda,
         event: "created",
         payload: {
-          hostWallet,
-          wagerLamports: onchain.wagerLamports.toString(),
-          program: PROGRAM_ID.toBase58(),
+          hostWallet: host,
+          wagerLamports: onchain.wagerWei.toString(),
+          program: DUEL_ADDRESS,
           arena,
+          hostNftId: onchain.hostTokenId.toString(),
         },
       });
       await db().insert(chatMessages).values({
@@ -166,8 +166,8 @@ export async function POST(req: Request) {
         username: "SYS",
         kind: "system",
         body: rematchOf
-          ? "Rematch circle. Wager is locked in the PDA. Winner takes all."
-          : "Circle opened. Wager is locked in the program PDA. Winner takes all.",
+          ? "Rematch circle. Stake is locked in the escrow. Winner takes all."
+          : "Circle opened. Stake is locked in the escrow contract. Winner takes all.",
       });
     }
 
@@ -175,7 +175,8 @@ export async function POST(req: Request) {
       const prior = await db().query.rooms.findFirst({ where: eq(rooms.id, rematchOf) });
       const allowed =
         prior &&
-        (prior.hostWallet === hostWallet || prior.challengerWallet === hostWallet);
+        (prior.hostWallet.toLowerCase() === host ||
+          prior.challengerWallet?.toLowerCase() === host);
       if (allowed) {
         const already = await db()
           .select()
@@ -190,9 +191,9 @@ export async function POST(req: Request) {
             event: "rematch",
             payload: {
               rematchPda: pda,
-              hostWallet,
+              hostWallet: host,
               duelId,
-              wagerLamports: onchain.wagerLamports.toString(),
+              wagerLamports: onchain.wagerWei.toString(),
             },
           });
           await db().insert(chatMessages).values({

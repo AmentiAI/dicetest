@@ -1,23 +1,32 @@
-import type { Connection, PublicKey } from "@solana/web3.js";
 import { count, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { failInternal } from "@/lib/api";
-import { limitOr429 } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import { profiles, rooms } from "@/lib/db/schema";
+import { publicClient } from "@/lib/eth/client";
+import { CHAIN, DUEL_ADDRESS, isContractsConfigured } from "@/lib/eth/constants";
+import { currentBlock } from "@/lib/eth/fetch";
+import { limitOr429 } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
-
-const SLOT_HASHES = "SysvarS1otHashes111111111111111111111111111";
-const FALLBACK_PROGRAM_ID = "Djg4PX3upqax7GWrxWUjF3ydhbDDPqugM5QTsoNu14xx";
 
 let deployedAt = 0;
 let deployed = false;
 
-async function programDeployedCached(connection: Connection, programId: PublicKey) {
+async function contractsLive() {
   if (Date.now() - deployedAt < 30_000) return deployed;
-  const info = await connection.getAccountInfo(programId, "confirmed");
-  deployed = Boolean(info?.executable);
+  if (!isContractsConfigured()) {
+    deployed = false;
+    deployedAt = Date.now();
+    return false;
+  }
+  try {
+    const client = publicClient();
+    const code = await client.getCode({ address: DUEL_ADDRESS });
+    deployed = Boolean(code && code !== "0x");
+  } catch {
+    deployed = false;
+  }
   deployedAt = Date.now();
   return deployed;
 }
@@ -39,28 +48,24 @@ export async function GET(req: Request) {
         .where(eq(rooms.status, "locked")),
     ]);
 
-    const programId = process.env.NEXT_PUBLIC_PROGRAM_ID || FALLBACK_PROGRAM_ID;
     let slot: number | null = null;
     let programDeployed = false;
     let rpc: string | null = null;
 
     try {
-      const { serverConnection } = await import("@/lib/solana/connection");
-      const { PROGRAM_ID } = await import("@/lib/solana/constants");
-      const { currentSlot } = await import("@/lib/solana/fetch");
-      const connection = serverConnection();
-      rpc = connection.rpcEndpoint.replace(/api-key=[^&]+/i, "api-key=…");
-      slot = await currentSlot(connection);
-      programDeployed = await programDeployedCached(connection, PROGRAM_ID);
+      const client = publicClient();
+      rpc = CHAIN.rpcUrls.default.http[0] ?? null;
+      slot = await currentBlock(client);
+      programDeployed = await contractsLive();
     } catch {
-      // RPC / web3.js must not take down the whole stats payload.
+      // RPC must not take down the whole stats payload.
     }
 
     return NextResponse.json({
       slot,
-      programId,
+      programId: DUEL_ADDRESS,
       programDeployed,
-      slotHashes: SLOT_HASHES,
+      chain: CHAIN.name,
       waiting: waiting[0]?.n ?? 0,
       locked: locked[0]?.n ?? 0,
       settled: settled[0]?.n ?? 0,

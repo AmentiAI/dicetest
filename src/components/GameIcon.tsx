@@ -17,6 +17,7 @@ type IconName =
   | "chart"
   | "help"
   | "settings"
+  | "eth"
   | "sol"
   | "users";
 
@@ -128,11 +129,12 @@ export function GameIcon({
           <path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
         </svg>
       );
+    case "eth":
     case "sol":
       return (
         <svg {...common} fill="currentColor" stroke="none">
-          <circle cx="12" cy="12" r="9" opacity="0.25" />
-          <path d="M7 15.5l5-9 5 9H7z" />
+          <path d="M12 3l6.5 9.2L12 15.4 5.5 12.2 12 3z" opacity="0.95" />
+          <path d="M12 16.2l6.5-3.2L12 21 5.5 13l6.5 3.2z" opacity="0.65" />
         </svg>
       );
     case "users":

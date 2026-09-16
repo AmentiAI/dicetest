@@ -2,17 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PublicKey } from "@solana/web3.js";
-import { formatSol, shortKey } from "@/lib/format";
+import { formatEth, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
 import {
+  DUEL_ADDRESS,
   explorerAccount,
-  explorerSlot,
+  explorerBlock,
   explorerTx,
-} from "@/lib/solana/constants";
-import { deriveRolls } from "@/lib/solana/dice";
-import { fromHex } from "@/lib/solana/bytes";
+} from "@/lib/eth/constants";
+import { deriveRolls } from "@/lib/eth/dice";
 import { Leaderboard } from "@/components/Leaderboard";
+import type { Address, Hex } from "viem";
 
 type RoomRow = {
   id: string;
@@ -45,13 +45,14 @@ function proofCheck(r: RoomRow): "ok" | "fail" | "incomplete" {
     return "incomplete";
   }
   try {
+    const entropy = (r.slotHash.startsWith("0x") ? r.slotHash : `0x${r.slotHash}`) as Hex;
     const derived = deriveRolls({
-      slotHash: fromHex(r.slotHash),
-      duel: new PublicKey(r.id),
-      host: new PublicKey(r.hostWallet),
-      challenger: new PublicKey(r.challengerWallet),
-      wagerLamports: BigInt(r.wagerLamports),
-      revealSlot: BigInt(r.revealSlot),
+      entropy,
+      duelId: r.id,
+      host: r.hostWallet as Address,
+      challenger: r.challengerWallet as Address,
+      wagerWei: BigInt(r.wagerLamports),
+      revealBlock: r.revealSlot,
     });
     return derived.hostRoll === r.hostRoll && derived.challengerRoll === r.challengerRoll
       ? "ok"
@@ -86,7 +87,7 @@ export default function HistoryPage() {
           <p className="dash-eyebrow">Receipts</p>
           <h1>Match history</h1>
           <p className="muted">
-            Every settled circle with the slot hash, rolls, PDA, and explorer
+            Every settled circle with the blockhash, rolls, duel id, and explorer
             transactions used to prove the result.
           </p>
         </div>
@@ -118,7 +119,7 @@ export default function HistoryPage() {
                     </h3>
                     <p className="muted">
                       {r.hostRoll ?? "—"} – {r.challengerRoll ?? "—"} · {winnerName}{" "}
-                      takes {formatSol(pot)}
+                      takes {formatEth(pot)}
                     </p>
                   </div>
                   <div className="history-head-actions">
@@ -164,17 +165,17 @@ export default function HistoryPage() {
                     </div>
                     <div>
                       <dt>Each wager</dt>
-                      <dd>{formatSol(r.wagerLamports)}</dd>
+                      <dd>{formatEth(r.wagerLamports)}</dd>
                     </div>
                     <div>
                       <dt>Pot</dt>
-                      <dd>{formatSol(pot)}</dd>
+                      <dd>{formatEth(pot)}</dd>
                     </div>
                     <div>
-                      <dt>PDA</dt>
+                      <dt>Escrow</dt>
                       <dd className="proof-hash">
-                        <a href={explorerAccount(r.id)} target="_blank" rel="noreferrer">
-                          {r.id}
+                        <a href={explorerAccount(DUEL_ADDRESS)} target="_blank" rel="noreferrer">
+                          {DUEL_ADDRESS}
                         </a>
                       </dd>
                     </div>
@@ -211,10 +212,10 @@ export default function HistoryPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt>Commit slot</dt>
+                      <dt>Commit block</dt>
                       <dd>
                         {r.commitSlot ? (
-                          <a href={explorerSlot(r.commitSlot)} target="_blank" rel="noreferrer">
+                          <a href={explorerBlock(r.commitSlot)} target="_blank" rel="noreferrer">
                             {r.commitSlot}
                           </a>
                         ) : (
@@ -223,10 +224,10 @@ export default function HistoryPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt>Reveal slot</dt>
+                      <dt>Reveal block</dt>
                       <dd>
                         {r.revealSlot ? (
-                          <a href={explorerSlot(r.revealSlot)} target="_blank" rel="noreferrer">
+                          <a href={explorerBlock(r.revealSlot)} target="_blank" rel="noreferrer">
                             {r.revealSlot}
                           </a>
                         ) : (
@@ -235,7 +236,7 @@ export default function HistoryPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt>Slot hash</dt>
+                      <dt>Blockhash</dt>
                       <dd className="proof-hash">{r.slotHash ?? "—"}</dd>
                     </div>
                     <div>
@@ -259,8 +260,8 @@ export default function HistoryPage() {
                     <div>
                       <dt>Mix</dt>
                       <dd className="proof-hash">
-                        SHA-256(slot_hash ∥ pda ∥ host ∥ challenger ∥ wager ∥
-                        reveal_slot ∥ counter)
+                        keccak256(blockhash ∥ duel_id ∥ host ∥ challenger ∥ wager_wei ∥
+                        reveal_block ∥ counter)
                       </dd>
                     </div>
                   </dl>

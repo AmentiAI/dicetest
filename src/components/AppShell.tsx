@@ -8,16 +8,17 @@ import { DashboardSidebar } from "./dashboard/DashboardSidebar";
 import { DashboardTopbar } from "./dashboard/DashboardTopbar";
 import { DashboardRightRail } from "./dashboard/DashboardRightRail";
 import { DuelNav } from "./DuelNav";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { PLAY_LOCKED } from "@/lib/waitlist";
+import { useEthWallet } from "@/lib/eth/wallet";
 
 function ShellInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { publicKey } = useWallet();
+  const { address } = useEthWallet();
   const { profile } = useProfile();
   const needIdentity = Boolean(
-    publicKey && !profile && !pathname.startsWith("/admin"),
+    address && !profile && !pathname.startsWith("/admin") && !PLAY_LOCKED,
   );
-  const showRail = pathname === "/" || pathname === "/circles";
+  const showRail = !PLAY_LOCKED && (pathname === "/" || pathname === "/circles");
   const isDuel = pathname.startsWith("/duel");
 
   if (isDuel) {

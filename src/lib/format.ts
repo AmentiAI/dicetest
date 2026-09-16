@@ -1,24 +1,29 @@
-import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+const WEI = 10n ** 18n;
 
-export function lamportsToSol(lamports: bigint | number | string) {
-  return Number(lamports) / LAMPORTS_PER_SOL;
+export function weiToEth(wei: bigint | number | string) {
+  return Number(wei) / Number(WEI);
 }
 
-export function solToLamports(sol: number) {
-  return BigInt(Math.round(sol * LAMPORTS_PER_SOL));
+export function ethToWei(eth: number) {
+  return BigInt(Math.round(eth * 1e18));
 }
 
-export function formatSol(lamports: bigint | number | string, digits = 4) {
-  const n = lamportsToSol(lamports);
+export function formatEth(wei: bigint | number | string, digits = 4) {
+  const n = weiToEth(wei);
   return `${n.toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: digits,
-  })} SOL`;
+  })} ETH`;
 }
 
-export function formatUsd(sol: number, price: number | null) {
+/** @deprecated use formatEth — kept so remaining UI compiles during the swap */
+export const formatSol = formatEth;
+export const lamportsToSol = weiToEth;
+export const solToLamports = ethToWei;
+
+export function formatUsd(eth: number, price: number | null) {
   if (price == null || !Number.isFinite(price)) return "—";
-  const usd = sol * price;
+  const usd = eth * price;
   return usd.toLocaleString(undefined, {
     style: "currency",
     currency: "USD",
@@ -26,16 +31,15 @@ export function formatUsd(sol: number, price: number | null) {
   });
 }
 
-export function shortKey(key: string | PublicKey, left = 4, right = 4) {
-  const s = typeof key === "string" ? key : key.toBase58();
+export function shortKey(key: string, left = 4, right = 4) {
+  const s = key.startsWith("0x") ? key : key;
   if (s.length <= left + right + 1) return s;
   return `${s.slice(0, left)}…${s.slice(-right)}`;
 }
 
-export async function getSolBalance(connection: Connection, pubkey: PublicKey) {
-  return connection.getBalance(pubkey, "confirmed");
-}
-
-export function explorerClusterParam(network: string) {
-  return network === "mainnet-beta" ? "" : `?cluster=${network}`;
+export function ethInputFromWei(wei: string) {
+  const n = Number(wei) / 1e18;
+  if (!Number.isFinite(n)) return "0.05";
+  const text = n.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+  return text || "0";
 }

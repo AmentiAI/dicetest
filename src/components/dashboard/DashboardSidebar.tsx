@@ -3,51 +3,62 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GameIcon } from "@/components/GameIcon";
-import { useWeeklyCountdown } from "./useWeeklyCountdown";
+import { PLAY_LOCKED } from "@/lib/waitlist";
 
 const NAV = [
-  { href: "/", label: "Dashboard", icon: "dashboard" as const, match: (p: string) => p === "/" },
   {
-    href: "/circles",
+    href: "/",
+    label: "Dashboard",
+    icon: "dashboard" as const,
+    match: (p: string) => p === "/",
+    locked: false,
+  },
+  {
+    href: PLAY_LOCKED ? "/" : "/circles",
     label: "Play Game",
     icon: "play" as const,
     match: (p: string) => p === "/circles" || p.startsWith("/duel"),
+    locked: PLAY_LOCKED,
   },
   {
-    href: "/leaderboard",
+    href: PLAY_LOCKED ? "/" : "/leaderboard",
     label: "Leaderboard",
     icon: "trophy" as const,
     match: (p: string) => p.startsWith("/leaderboard"),
+    locked: PLAY_LOCKED,
   },
   {
-    href: "/circles",
+    href: "/",
     label: "Affiliates",
     icon: "affiliates" as const,
     match: () => false,
+    locked: true,
   },
   {
-    href: "/circles",
+    href: "/",
     label: "Rewards",
     icon: "rewards" as const,
     match: () => false,
+    locked: true,
   },
   {
     href: "/fair",
     label: "Provably Fair",
     icon: "shield" as const,
     match: (p: string) => p.startsWith("/fair"),
+    locked: false,
   },
   {
-    href: "/history",
+    href: PLAY_LOCKED ? "/" : "/history",
     label: "Statistics",
     icon: "stats" as const,
     match: (p: string) => p.startsWith("/history"),
+    locked: PLAY_LOCKED,
   },
 ];
 
 export function DashboardSidebar() {
   const pathname = usePathname();
-  const countdown = useWeeklyCountdown();
 
   return (
     <aside className="dash-sidebar">
@@ -61,49 +72,29 @@ export function DashboardSidebar() {
       </Link>
 
       <nav className="dash-nav">
-        {NAV.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={`dash-nav-item${item.match(pathname) ? " is-active" : ""}`}
-          >
-            <GameIcon name={item.icon} size={18} />
-            <span>{item.label}</span>
-          </Link>
-        ))}
+        {NAV.map((item) => {
+          const className = `dash-nav-item${item.match(pathname) ? " is-active" : ""}${item.locked ? " is-locked" : ""}`;
+          const inner = (
+            <>
+              <GameIcon name={item.icon} size={18} />
+              <span>{item.label}</span>
+              {item.locked ? <em className="nav-lock">Locked</em> : null}
+            </>
+          );
+          if (item.locked) {
+            return (
+              <span key={item.label} className={className} aria-disabled>
+                {inner}
+              </span>
+            );
+          }
+          return (
+            <Link key={item.label} href={item.href} className={className}>
+              {inner}
+            </Link>
+          );
+        })}
       </nav>
-
-      <div className="dash-race-card">
-        <p className="dash-race-tag">Weekly race</p>
-        <h3 className="dash-race-pool">250 SOL</h3>
-        <p className="dash-race-sub">Prize pool · winner takes leaderboard</p>
-        <div className="dash-countdown">
-          <div>
-            <strong>{countdown.d}</strong>
-            <span>Days</span>
-          </div>
-          <div>
-            <strong>{String(countdown.h).padStart(2, "0")}</strong>
-            <span>Hours</span>
-          </div>
-          <div>
-            <strong>{String(countdown.m).padStart(2, "0")}</strong>
-            <span>Min</span>
-          </div>
-          <div>
-            <strong>{String(countdown.s).padStart(2, "0")}</strong>
-            <span>Sec</span>
-          </div>
-        </div>
-        <div className="dash-race-cubes" aria-hidden>
-          <span />
-          <span />
-          <span />
-        </div>
-        <Link href="/leaderboard" className="btn-race">
-          View Leaderboard
-        </Link>
-      </div>
 
       <div className="dash-sidebar-foot">
         <div className="dash-social">

@@ -2,20 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useAccount, useBalance } from "wagmi";
 import { WalletButton } from "@/components/WalletButton";
 import { WalletBadge } from "@/components/WalletBadge";
 import { GameIcon } from "@/components/GameIcon";
+import { DiceNftBadge } from "@/components/NftPicker";
 import { useProfile } from "@/components/ProfileProvider";
 import { formatUsd, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
+import { PLAY_LOCKED } from "@/lib/waitlist";
 
 export function DashboardTopbar() {
-  const { publicKey } = useWallet();
-  const { connection } = useConnection();
+  const { address } = useAccount();
+  const { data: bal } = useBalance({ address });
   const { profile } = useProfile();
-  const [balance, setBalance] = useState<number | null>(null);
   const [price, setPrice] = useState<number | null>(null);
   const [sound, setSound] = useState(true);
 
@@ -28,51 +28,30 @@ export function DashboardTopbar() {
     void getJson<{ usd: number | null }>("/api/price").then((j) => setPrice(j?.usd ?? null));
   }, []);
 
-  useEffect(() => {
-    if (!publicKey) {
-      setBalance(null);
-      return;
-    }
-    let stop = false;
-    const tick = async () => {
-      try {
-        const lamports = await connection.getBalance(publicKey, "confirmed");
-        if (!stop) setBalance(lamports);
-      } catch {
-        /* ignore */
-      }
-    };
-    void tick();
-    const t = setInterval(() => void tick(), 30_000);
-    return () => {
-      stop = true;
-      clearInterval(t);
-    };
-  }, [publicKey, connection]);
-
-  const sol = balance != null ? balance / LAMPORTS_PER_SOL : null;
+  const eth = bal ? Number(bal.formatted) : null;
 
   return (
     <header className="dash-topbar">
       <div className="dash-topbar-spacer" />
 
       <div className="dash-topbar-actions">
-        {sol != null ? (
+        {eth != null ? (
           <div className="dash-balance">
             <span className="dash-balance-sol">
-              {sol.toLocaleString(undefined, { maximumFractionDigits: 2 })} SOL
+              {eth.toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH
             </span>
-            <span className="dash-balance-usd">{formatUsd(sol, price)}</span>
+            <span className="dash-balance-usd">{formatUsd(eth, price)}</span>
           </div>
         ) : null}
 
-        {publicKey ? (
+        {address ? (
           <div className="dash-wallet-pill">
             <WalletBadge
-              label={profile?.username ?? shortKey(publicKey.toBase58(), 2, 2)}
+              label={profile?.username ?? shortKey(address, 2, 2)}
               accent="#8b5cf6"
             />
-            <span>{shortKey(publicKey.toBase58(), 4, 4)}</span>
+            <span>{shortKey(address, 4, 4)}</span>
+            <DiceNftBadge tokenId={profile?.nftTokenId} />
           </div>
         ) : null}
 
@@ -83,10 +62,12 @@ export function DashboardTopbar() {
         >
           <GameIcon name="bell" size={18} />
         </button>
-        <Link href="/history" className="dash-icon-btn" aria-label="Statistics">
-          <GameIcon name="chart" size={18} />
-        </Link>
-        <Link href="/how-to-play" className="dash-icon-btn" aria-label="Help">
+        {PLAY_LOCKED ? null : (
+          <Link href="/history" className="dash-icon-btn" aria-label="Statistics">
+            <GameIcon name="chart" size={18} />
+          </Link>
+        )}
+        <Link href="/fair" className="dash-icon-btn" aria-label="Help">
           <GameIcon name="help" size={18} />
         </Link>
         <button
@@ -102,7 +83,7 @@ export function DashboardTopbar() {
           <GameIcon name={sound ? "sound" : "settings"} size={18} />
         </button>
 
-        {!publicKey ? <WalletButton compact /> : null}
+        {!address ? <WalletButton compact /> : null}
       </div>
     </header>
   );

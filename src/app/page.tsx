@@ -1,5 +1,5 @@
-import { LandingPage } from "@/components/LandingPage";
+import { WaitlistHome } from "@/components/WaitlistHome";
 
 export default function Home() {
-  return <LandingPage />;
+  return <WaitlistHome />;
 }

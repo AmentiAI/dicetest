@@ -1,11 +1,11 @@
-import nacl from "tweetnacl";
-import bs58 from "bs58";
-import { base64ToBytes } from "./base64";
+import { keccak256, toBytes } from "viem";
+import { verifyMessage } from "viem";
+import { isEthAddress, normalizeAddress } from "./eth/keys";
 
 export const AUTH_TS_WINDOW_MS = 2 * 60 * 1000;
 
-export function identityMessage(wallet: string, username: string, demon: string) {
-  return `BLOCK DICE bind\nwallet:${wallet}\nusername:${username}\ndemon:${demon}`;
+export function identityMessage(wallet: string, username: string, nftTokenId: string) {
+  return `BLOCK DICE bind\nwallet:${wallet}\nusername:${username}\nnft:${nftTokenId}`;
 }
 
 export function chatAuthMessage(
@@ -28,19 +28,30 @@ export function parseAuthTimestamp(ts: unknown) {
   return Math.trunc(n);
 }
 
-export function verifyWalletSignature(args: {
+export async function verifyWalletSignature(args: {
   wallet: string;
   message: string;
   signatureBase64: string;
 }) {
   try {
-    const pubkey = bs58.decode(args.wallet);
-    if (pubkey.length !== 32) return false;
-    const message = new TextEncoder().encode(args.message);
-    const signature = base64ToBytes(args.signatureBase64);
-    if (signature.length !== 64) return false;
-    return nacl.sign.detached.verify(message, signature, pubkey);
+    if (!isEthAddress(args.wallet)) return false;
+    const signature = args.signatureBase64.startsWith("0x")
+      ? args.signatureBase64
+      : `0x${args.signatureBase64}`;
+    return await verifyMessage({
+      address: normalizeAddress(args.wallet) as `0x${string}`,
+      message: args.message,
+      signature: signature as `0x${string}`,
+    });
   } catch {
     return false;
   }
+}
+
+export function bytesToEthSignature(sig: string) {
+  return sig.startsWith("0x") ? sig : `0x${sig}`;
+}
+
+export function messageId(message: string) {
+  return keccak256(toBytes(message));
 }

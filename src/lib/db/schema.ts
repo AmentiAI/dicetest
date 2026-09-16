@@ -11,6 +11,7 @@ export const profiles = pgTable("profiles", {
   wallet: text("wallet").primaryKey(),
   username: text("username").notNull(),
   demon: text("demon").notNull().default("cinder-wraith"),
+  nftTokenId: text("nft_token_id"),
   wins: integer("wins").notNull().default(0),
   losses: integer("losses").notNull().default(0),
   volumeLamports: text("volume_lamports").notNull().default("0"),
@@ -24,6 +25,8 @@ export const rooms = pgTable("rooms", {
   hostWallet: text("host_wallet").notNull(),
   challengerWallet: text("challenger_wallet"),
   wagerLamports: text("wager_lamports").notNull(),
+  hostNftId: text("host_nft_id"),
+  challengerNftId: text("challenger_nft_id"),
   status: text("status").notNull().default("waiting"),
   commitSlot: text("commit_slot"),
   revealSlot: text("reveal_slot"),
@@ -56,6 +59,14 @@ export const matchEvents = pgTable("match_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const waitlist = pgTable("waitlist", {
+  slot: serial("slot").primaryKey(),
+  wallet: text("wallet").notNull().unique(),
+  xHandle: text("x_handle").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type Profile = typeof profiles.$inferSelect;
 export type Room = typeof rooms.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+export type WaitlistRow = typeof waitlist.$inferSelect;

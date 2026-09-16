@@ -44,7 +44,7 @@ export function SlotCountdown({
       >
         {slotsLeft}
       </motion.div>
-      <p className="slot-count-label">slots until roll</p>
+      <p className="slot-count-label">blocks until roll</p>
     </div>
   );
 }

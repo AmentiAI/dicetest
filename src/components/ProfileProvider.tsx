@@ -8,17 +8,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { identityMessage } from "@/lib/auth";
-import { bytesToBase64 } from "@/lib/base64";
 import { getJson, postJson } from "@/lib/http";
-
-const DEFAULT_DEMON = "cinder-wraith";
+import { useEthWallet } from "@/lib/eth/wallet";
 
 export type Profile = {
   wallet: string;
   username: string;
   demon: string;
+  nftTokenId: string | null;
   wins: number;
   losses: number;
   volumeLamports: string;
@@ -27,59 +25,58 @@ export type Profile = {
 const Ctx = createContext<{
   profile: Profile | null;
   loading: boolean;
-  save: (username: string) => Promise<void>;
+  save: (username: string, nftTokenId?: string) => Promise<void>;
   refresh: () => Promise<void>;
 } | null>(null);
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const { publicKey, signMessage } = useWallet();
+  const { address, signMessage } = useEthWallet();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!publicKey) {
+    if (!address) {
       setProfile(null);
       return;
     }
     setLoading(true);
     try {
       const json = await getJson<{ profile: Profile | null }>(
-        `/api/profile?wallet=${publicKey.toBase58()}`,
+        `/api/profile?wallet=${address}`,
       );
       setProfile(json?.profile ?? null);
     } finally {
       setLoading(false);
     }
-  }, [publicKey]);
+  }, [address]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   const save = useCallback(
-    async (username: string) => {
-      if (!publicKey || !signMessage) {
+    async (username: string, nftTokenId?: string) => {
+      if (!address) {
         throw new Error("Connect a wallet that can sign messages");
       }
-      const wallet = publicKey.toBase58();
-      const demon = profile?.demon ?? DEFAULT_DEMON;
-      const message = identityMessage(wallet, username, demon);
-      const sig = await signMessage(new TextEncoder().encode(message));
+      const nft = nftTokenId ?? profile?.nftTokenId ?? "0";
+      const message = identityMessage(address, username, nft);
+      const sig = await signMessage(message);
       try {
         const json = await postJson<{ profile: Profile; error?: string }>(
           "/api/profile",
           {
-            wallet,
+            wallet: address,
             username,
-            demon,
-            signatureBase64: bytesToBase64(new Uint8Array(sig)),
+            nftTokenId: nft,
+            signatureBase64: sig,
           },
         );
         if (!json.profile) throw new Error("Profile was not saved");
         setProfile(json.profile);
       } catch (e) {
         const json = await getJson<{ profile: Profile | null }>(
-          `/api/profile?wallet=${wallet}`,
+          `/api/profile?wallet=${address}`,
         );
         if (json?.profile) {
           setProfile(json.profile);
@@ -88,7 +85,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw e;
       }
     },
-    [publicKey, signMessage, profile?.demon],
+    [address, signMessage, profile?.nftTokenId],
   );
 
   return (
@@ -103,4 +100,3 @@ export function useProfile() {
   if (!ctx) throw new Error("useProfile outside provider");
   return ctx;
 }
-

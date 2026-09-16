@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { isAdminWallet } from "./admin";
-import { isPubkeyString } from "./solana/keys";
+import { isEthAddress } from "./eth/keys";
 
 let memorySecret: string | null = null;
 
@@ -28,7 +28,7 @@ export function verifyAdminToken(token: string): string | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [wallet, expStr, mac] = parts;
-  if (!wallet || !expStr || !mac || !isPubkeyString(wallet)) return null;
+  if (!wallet || !expStr || !mac || !isEthAddress(wallet)) return null;
   const exp = Number(expStr);
   if (!Number.isFinite(exp) || Date.now() > exp) return null;
   const payload = `${wallet}.${expStr}`;

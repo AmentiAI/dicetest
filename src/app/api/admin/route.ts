@@ -11,7 +11,7 @@ import {
 import { db } from "@/lib/db";
 import { matchEvents, profiles, rooms } from "@/lib/db/schema";
 import { consumeNonce, limitOr429 } from "@/lib/rate-limit";
-import { isPubkeyString } from "@/lib/solana/keys";
+import { isEthAddress } from "@/lib/eth/keys";
 
 export const runtime = "nodejs";
 
@@ -210,11 +210,11 @@ export async function POST(req: Request) {
       (body as { signatureBase64?: unknown }).signatureBase64 ?? "",
     );
     const ts = parseAuthTimestamp((body as { ts?: unknown }).ts);
-    if (!isPubkeyString(wallet) || !ts) return fail("invalid auth payload");
+    if (!isEthAddress(wallet) || !ts) return fail("invalid auth payload");
     if (!isAdminWallet(wallet)) return fail("forbidden", 403);
 
     const message = adminAuthMessage(wallet, ts);
-    if (!verifyWalletSignature({ wallet, message, signatureBase64 })) {
+    if (!(await verifyWalletSignature({ wallet, message, signatureBase64 }))) {
       return fail("invalid wallet signature", 401);
     }
     if (!consumeNonce(`admin:${wallet}:${ts}`)) {

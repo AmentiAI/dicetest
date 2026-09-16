@@ -1,15 +1,13 @@
 "use client";
 
-import { useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { shortKey } from "@/lib/format";
 import { CoolBtn } from "@/components/CoolBtn";
+import { useEthWallet } from "@/lib/eth/wallet";
 
 export function WalletButton({ compact = false }: { compact?: boolean }) {
-  const { publicKey, disconnect, connected } = useWallet();
-  const { setVisible } = useWalletModal();
+  const { address, connected, disconnect, openConnectModal } = useEthWallet();
 
-  if (connected && publicKey) {
+  if (connected && address) {
     return (
       <button
         className="wallet-chip"
@@ -17,7 +15,7 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
         title="Disconnect"
       >
         <span className="pulse-dot" />
-        {shortKey(publicKey, 4, 4)}
+        {shortKey(address, 4, 4)}
       </button>
     );
   }
@@ -26,9 +24,9 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
     <CoolBtn
       className={compact ? "btn-compact" : "w-full"}
       pulse={!compact}
-      onClick={() => setVisible(true)}
+      onClick={() => openConnectModal()}
     >
-      Connect Wallet
+      Connect ETH / Robinhood
     </CoolBtn>
   );
 }

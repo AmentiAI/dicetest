@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatSol, shortKey } from "@/lib/format";
+import { formatEth, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
 import { WalletBadge } from "@/components/WalletBadge";
+import { DiceNftBadge } from "@/components/NftPicker";
 
 type Leader = {
   wallet: string;
@@ -12,6 +13,7 @@ type Leader = {
   wins: number;
   losses: number;
   volumeLamports: string;
+  nftTokenId?: string | null;
 };
 
 type RoomRow = {
@@ -70,7 +72,7 @@ export function DashboardRightRail() {
 
   const shown =
     tab === "high"
-      ? activity.filter((r) => Number(r.wagerLamports) >= 50_000_000)
+      ? activity.filter((r) => Number(r.wagerLamports) >= 1e16)
       : activity;
 
   const top3 = (leaders.length ? leaders : PREVIEW_LEADERS).slice(0, 3);
@@ -119,11 +121,11 @@ export function DashboardRightRail() {
                     <strong>{winnerName}</strong>
                     <span className="pred-badge sm">HIGHER ROLL</span>
                     <span className="act-meta">
-                      {formatSol(r.wagerLamports)} · 2.00×
+                      {formatEth(r.wagerLamports)} · 2.00×
                     </span>
                   </div>
                   <span className={won ? "dash-profit win" : "dash-profit"}>
-                    {won ? `+${formatSol(profit.toString())}` : "…"}
+                    {won ? `+${formatEth(profit.toString())}` : "…"}
                   </span>
                 </li>
               );
@@ -157,7 +159,8 @@ export function DashboardRightRail() {
               <span className="podium-medal">🥈</span>
               <WalletBadge label={top3[1].username} accent="#94a3b8" />
               <strong>{top3[1].username}</strong>
-              <small>{formatSol(top3[1].volumeLamports)}</small>
+              <DiceNftBadge tokenId={top3[1].nftTokenId} />
+              <small>{formatEth(top3[1].volumeLamports)}</small>
             </div>
           ) : (
             <div className="dash-podium-slot silver empty" />
@@ -167,7 +170,8 @@ export function DashboardRightRail() {
               <span className="podium-medal">🥇</span>
               <WalletBadge label={top3[0].username} accent="#fbbf24" />
               <strong>{top3[0].username}</strong>
-              <small>{formatSol(top3[0].volumeLamports)}</small>
+              <DiceNftBadge tokenId={top3[0].nftTokenId} />
+              <small>{formatEth(top3[0].volumeLamports)}</small>
             </div>
           ) : (
             <div className="dash-podium-slot gold empty" />
@@ -177,7 +181,8 @@ export function DashboardRightRail() {
               <span className="podium-medal">🥉</span>
               <WalletBadge label={top3[2].username} accent="#d97706" />
               <strong>{top3[2].username}</strong>
-              <small>{formatSol(top3[2].volumeLamports)}</small>
+              <DiceNftBadge tokenId={top3[2].nftTokenId} />
+              <small>{formatEth(top3[2].volumeLamports)}</small>
             </div>
           ) : (
             <div className="dash-podium-slot bronze empty" />
@@ -189,7 +194,8 @@ export function DashboardRightRail() {
               <span className="rank-num">{i + 4}</span>
               <WalletBadge label={p.username} />
               <strong>{p.username}</strong>
-              <em>{formatSol(p.volumeLamports)}</em>
+              <DiceNftBadge tokenId={p.nftTokenId} />
+              <em>{formatEth(p.volumeLamports)}</em>
             </li>
           ))}
         </ul>

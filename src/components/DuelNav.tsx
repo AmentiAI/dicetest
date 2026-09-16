@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { WalletButton } from "@/components/WalletButton";
-import { SOLANA_NETWORK } from "@/lib/solana/constants";
+import { CHAIN } from "@/lib/eth/constants";
 
 const NAV = [
   { href: "/circles", label: "Play", match: (p: string) => p === "/circles" || p.startsWith("/duel") },
@@ -33,7 +33,7 @@ export function DuelNav() {
       <div className="bd-nav-right">
         <span className="bd-net">
           <i />
-          {SOLANA_NETWORK === "mainnet-beta" ? "Mainnet" : "Devnet"}
+          {CHAIN.name}
         </span>
         <WalletButton compact />
       </div>

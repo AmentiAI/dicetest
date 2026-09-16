@@ -3,19 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { formatSol, formatUsd, shortKey } from "@/lib/format";
+import { formatEth, formatUsd, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
 import { CreateDuel } from "./CreateDuel";
 import { useProfile } from "./ProfileProvider";
 import { ARENAS, type Arena } from "@/lib/cosmetics";
+import { DiceNftBadge } from "./NftPicker";
 
 type RoomRow = {
   id: string;
   hostWallet: string;
   wagerLamports: string;
   status: string;
+  hostNftId: string | null;
   arena: Arena | null;
-  host: { username: string } | null;
+  host: { username: string; nftTokenId: string | null } | null;
 };
 
 export function RoomBrowser() {
@@ -69,8 +71,8 @@ export function RoomBrowser() {
     <div className="dash-page">
       {stats && stats.programDeployed === false ? (
         <div className="notice notice-warn">
-          Program not deployed on this cluster — see README for{" "}
-          <code>anchor deploy</code>.
+          Escrow contracts are not deployed — set NEXT_PUBLIC_DUEL_ADDRESS and
+          NEXT_PUBLIC_NFT_ADDRESS after <code>forge script</code>.
         </div>
       ) : null}
 
@@ -78,7 +80,7 @@ export function RoomBrowser() {
         <div>
           <p className="dash-eyebrow">1v1 lobby</p>
           <h1>Play game</h1>
-          <p className="muted">Host or join a duel. Winner takes the pot.</p>
+          <p className="muted">Host or join a 1v1. Bet ETH, a dice NFT, or both.</p>
         </div>
         {profile ? <CreateDuel initialWager={initialWager} /> : <p className="muted">Connect wallet to host.</p>}
       </header>
@@ -86,7 +88,7 @@ export function RoomBrowser() {
       <div className="toolbar">
         <input
           className="search"
-          placeholder="Search host or PDA…"
+          placeholder="Search host or duel…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -132,7 +134,7 @@ export function RoomBrowser() {
           <div className="empty">No circles {filter === "open" ? "waiting" : "yet"}.</div>
         ) : (
           shown.map((r) => {
-            const sol = Number(r.wagerLamports) / 1e9;
+            const eth = Number(r.wagerLamports) / 1e18;
             const arena = r.arena;
             return (
               <Link
@@ -147,10 +149,18 @@ export function RoomBrowser() {
                     <span className={`badge ${r.status}`}>{r.status}</span>
                   </div>
                   <p className="muted">{shortKey(r.hostWallet)}</p>
+                  <DiceNftBadge tokenId={r.host?.nftTokenId} />
+                  {r.hostNftId && r.hostNftId !== r.host?.nftTokenId ? (
+                    <DiceNftBadge tokenId={r.hostNftId} staked />
+                  ) : null}
                 </div>
                 <div className="room-wager">
-                  <b className="gold">{formatSol(r.wagerLamports)}</b>
-                  <span>{formatUsd(sol, price)}</span>
+                  <b className="gold">
+                    {Number(r.wagerLamports) === 0 && r.hostNftId
+                      ? "NFT stake"
+                      : formatEth(r.wagerLamports)}
+                  </b>
+                  <span>{formatUsd(eth, price)}</span>
                 </div>
                 <span className="join-cta">
                   {r.status === "waiting" ? "Join" : "View"}

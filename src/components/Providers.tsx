@@ -1,31 +1,18 @@
 "use client";
 
-import "@/lib/polyfill";
-import { useMemo, type ReactNode } from "react";
-import {
-  ConnectionProvider,
-  WalletProvider,
-} from "@solana/wallet-adapter-react";
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { SOLANA_RPC } from "@/lib/solana/constants";
-import { rpcFetch } from "@/lib/solana/rpc";
-import "@solana/wallet-adapter-react-ui/styles.css";
+import { type ReactNode, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WagmiProvider } from "wagmi";
+import { wagmiConfig } from "@/lib/eth/wagmi";
+import { EthWalletProvider } from "@/lib/eth/wallet";
 
 export function Providers({ children }: { children: ReactNode }) {
-  const endpoint = useMemo(() => SOLANA_RPC, []);
-  const config = useMemo(
-    () => ({
-      commitment: "confirmed" as const,
-      confirmTransactionInitialTimeout: 60_000,
-      fetch: rpcFetch,
-    }),
-    [],
-  );
+  const [queryClient] = useState(() => new QueryClient());
   return (
-    <ConnectionProvider endpoint={endpoint} config={config}>
-      <WalletProvider wallets={[]} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <EthWalletProvider>{children}</EthWalletProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }

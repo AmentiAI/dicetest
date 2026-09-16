@@ -3,6 +3,7 @@ import { Barlow_Condensed, DM_Sans, IBM_Plex_Mono } from "next/font/google";
 import { Providers } from "@/components/Providers";
 import { AppShell } from "@/components/AppShell";
 import "./globals.css";
+import "./slow-roll-dice.css";
 
 const display = Barlow_Condensed({
   variable: "--font-display",
@@ -22,9 +23,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Roll the Block — Solana dice",
+  title: "Roll the Block — whitelist",
   description:
-    "1v1 SOL dice. Slot-hash proof. Winner takes all. No house fee.",
+    "Play is locked. 1,800 whitelist slots. Connect an ETH wallet and your X handle. Slow Roll dice revealed later.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

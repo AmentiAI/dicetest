@@ -4,29 +4,23 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { PublicKey } from "@solana/web3.js";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import {
-  cancelIx,
-  createDuelIx,
-  joinDuelIx,
-  refundExpiredIx,
-  settleIx,
-} from "@/lib/solana/instructions";
-import {
-  explorerAccount,
-  explorerSlot,
-  explorerTx,
+  DUEL_ADDRESS,
   DUEL_STATUS,
-  MAX_WAGER_SOL,
-  MIN_WAGER_SOL,
-  REVEAL_DELAY_SLOTS,
-} from "@/lib/solana/constants";
-import { formatSol, formatUsd, shortKey, solToLamports } from "@/lib/format";
+  MAX_WAGER_ETH,
+  MIN_WAGER_ETH,
+  REVEAL_DELAY_BLOCKS,
+  explorerAccount,
+  explorerBlock,
+  explorerTx,
+} from "@/lib/eth/constants";
+import { ethInputFromWei, ethToWei, formatEth, formatUsd, shortKey } from "@/lib/format";
 import { getJson, postJson } from "@/lib/http";
-import { explainChainError, sendIxs } from "@/lib/solana/send";
-import { fetchDuel, invalidateDuel } from "@/lib/solana/fetch";
+import { explainChainError } from "@/lib/eth/errors";
+import { fetchDuel, invalidateDuel } from "@/lib/eth/fetch";
+import { publicClient } from "@/lib/eth/client";
+import { useDuelActions } from "@/lib/eth/useDuelActions";
+import { useEthWallet } from "@/lib/eth/wallet";
 import { ArenaTable } from "./ArenaTable";
 import { DiceFace } from "./DiceFace";
 import { WalletBadge } from "./WalletBadge";
@@ -37,7 +31,9 @@ import { AnimatedNumber } from "./AnimatedNumber";
 import { GameIcon } from "./GameIcon";
 import { WalletButton } from "./WalletButton";
 import { CoolBtn } from "./CoolBtn";
+import { DiceNftBadge, NftPicker } from "./NftPicker";
 import { useProfile } from "./ProfileProvider";
+import { characterTone, isNftId } from "@/lib/eth/nft";
 import { arenaForSeed, type Arena, type ArenaId } from "@/lib/cosmetics";
 import { stagger, motion as motionTokens } from "@/lib/motion";
 
@@ -58,9 +54,11 @@ type RoomPayload = {
     createSignature: string;
     joinSignature: string | null;
     settleSignature: string | null;
+    hostNftId: string | null;
+    challengerNftId: string | null;
   };
-  host: { username: string; demon: string; wins: number; losses: number } | null;
-  challenger: { username: string; demon: string; wins: number; losses: number } | null;
+  host: { username: string; demon: string; nftTokenId: string | null; wins: number; losses: number } | null;
+  challenger: { username: string; demon: string; nftTokenId: string | null; wins: number; losses: number } | null;
   rematch?: {
     pda: string;
     hostWallet: string;
@@ -85,10 +83,8 @@ type SlotPayload = {
 const autoSettled = new Set<string>();
 
 export function DuelArena({ pda }: { pda: string }) {
-  const wallet = useWallet();
-  const { publicKey } = wallet;
-  const { setVisible: openWallet } = useWalletModal();
-  const { connection } = useConnection();
+  const { address, openConnectModal } = useEthWallet();
+  const duel = useDuelActions();
   const { profile } = useProfile();
   const router = useRouter();
   const [data, setData] = useState<RoomPayload | null>(null);
@@ -101,7 +97,12 @@ export function DuelArena({ pda }: { pda: string }) {
   const [rematchArena, setRematchArena] = useState<ArenaId>("alley");
   const [revealed, setRevealed] = useState(false);
   const [announced, setAnnounced] = useState(false);
+  const [joinNft, setJoinNft] = useState("0");
   const [payoutFailed, setPayoutFailed] = useState(false);
+
+  useEffect(() => {
+    if (profile?.nftTokenId) setJoinNft(profile.nftTokenId);
+  }, [profile?.nftTokenId]);
 
   const load = useCallback(async (withPrice = false) => {
     try {
@@ -139,7 +140,7 @@ export function DuelArena({ pda }: { pda: string }) {
     };
   }, [load]);
 
-  const me = publicKey?.toBase58();
+  const me = address;
   const room = data?.room;
   const isHost = Boolean(me && room && me === room.hostWallet);
   const isChallenger = Boolean(me && room && me === room.challengerWallet);
@@ -199,10 +200,10 @@ export function DuelArena({ pda }: { pda: string }) {
 
   useEffect(() => {
     if (!announced || !locked || !hashReady || settled || expired) return;
-    if (!inDuel || !publicKey || !room?.challengerWallet) return;
+    if (!inDuel || !address || !room?.challengerWallet) return;
     const key = `${pda}:${room.duelId}`;
     if (autoSettled.has(key)) return;
-    const wait = publicKey.toBase58() === room.hostWallet ? 400 : 2200;
+    const wait = address === room.hostWallet ? 400 : 2200;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       if (cancelled || autoSettled.has(key)) return;
@@ -222,7 +223,7 @@ export function DuelArena({ pda }: { pda: string }) {
     };
     // settle reads latest room/wallet from this render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [announced, locked, hashReady, settled, expired, inDuel, publicKey, room?.challengerWallet, room?.duelId, pda]);
+  }, [announced, locked, hashReady, settled, expired, inDuel, address, room?.challengerWallet, room?.duelId, pda]);
 
   const slotsLeft = useMemo(() => {
     if (!slot?.slot || !room?.revealSlot) return null;
@@ -230,25 +231,34 @@ export function DuelArena({ pda }: { pda: string }) {
     return left > 0 ? left : 0;
   }, [slot?.slot, room?.revealSlot]);
 
-  async function sendIx(
-    ix: Parameters<typeof sendIxs>[0]["ixs"][number],
-    after?: { join?: string; settle?: string },
-  ) {
-    if (!publicKey) throw new Error("Connect wallet");
+  async function reportSig(sig: string, after?: { join?: boolean; settle?: boolean }) {
+    await fetch(`/api/rooms/${pda}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        joinSignature: after?.join ? sig : undefined,
+        settleSignature: after?.settle ? sig : undefined,
+      }),
+    });
+    await load();
+  }
+
+  async function join() {
+    if (!address || !room) return;
     setBusy(true);
     setError(null);
     try {
-      const sig = await sendIxs({ connection, wallet, ixs: [ix] });
-      await fetch(`/api/rooms/${pda}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          joinSignature: after?.join ? sig : undefined,
-          settleSignature: after?.settle ? sig : undefined,
-        }),
+      const tokenId =
+        room.hostNftId && room.hostNftId !== "0" ? BigInt(joinNft || profile?.nftTokenId || "0") : 0n;
+      if (room.hostNftId && room.hostNftId !== "0" && tokenId === 0n) {
+        throw new Error("This circle is staking dice NFTs. Equip or pick one first.");
+      }
+      const sig = await duel.joinDuel({
+        duelId: BigInt(room.duelId),
+        tokenId,
+        wagerWei: BigInt(room.wagerLamports),
       });
-      await load();
-      return sig;
+      await reportSig(sig, { join: true });
     } catch (e) {
       setError(explainChainError(e));
     } finally {
@@ -256,21 +266,9 @@ export function DuelArena({ pda }: { pda: string }) {
     }
   }
 
-  async function join() {
-    if (!publicKey || !room) return;
-    await sendIx(
-      joinDuelIx({
-        challenger: publicKey,
-        host: new PublicKey(room.hostWallet),
-        duelId: BigInt(room.duelId),
-      }),
-      { join: "1" },
-    );
-  }
-
   function requestJoin() {
-    if (!publicKey) {
-      openWallet(true);
+    if (!address) {
+      openConnectModal();
       return;
     }
     if (!profile) {
@@ -281,9 +279,10 @@ export function DuelArena({ pda }: { pda: string }) {
   }
 
   async function settle() {
-    if (!publicKey || !room?.challengerWallet) return;
+    if (!address || !room?.challengerWallet) return;
     invalidateDuel(pda);
-    const onchain = await fetchDuel(connection, new PublicKey(pda));
+    const client = publicClient();
+    const onchain = await fetchDuel(client, pda);
     if (onchain && onchain.status === DUEL_STATUS.Settled) {
       await fetch(`/api/rooms/${pda}`, {
         method: "POST",
@@ -297,18 +296,19 @@ export function DuelArena({ pda }: { pda: string }) {
       await load();
       return;
     }
-    const sig = await sendIx(
-      settleIx({
-        settler: publicKey,
-        host: new PublicKey(room.hostWallet),
-        challenger: new PublicKey(room.challengerWallet),
-        duelId: BigInt(room.duelId),
-      }),
-      { settle: "1" },
-    );
-    if (sig) return sig;
+    setBusy(true);
+    setError(null);
+    try {
+      const sig = await duel.settle(BigInt(room.duelId));
+      await reportSig(sig, { settle: true });
+      return sig;
+    } catch (e) {
+      setError(explainChainError(e));
+    } finally {
+      setBusy(false);
+    }
     invalidateDuel(pda);
-    const again = await fetchDuel(connection, new PublicKey(pda));
+    const again = await fetchDuel(client, pda);
     if (again && again.status === DUEL_STATUS.Settled) {
       setError(null);
       await fetch(`/api/rooms/${pda}`, {
@@ -331,59 +331,61 @@ export function DuelArena({ pda }: { pda: string }) {
   }
 
   async function cancel() {
-    if (!publicKey || !room) return;
-    await sendIx(
-      cancelIx({ host: publicKey, duelId: BigInt(room.duelId) }),
-    );
+    if (!address || !room) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await duel.cancel(BigInt(room.duelId));
+      await load();
+    } catch (e) {
+      setError(explainChainError(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function refund() {
-    if (!publicKey || !room?.challengerWallet) return;
-    await sendIx(
-      refundExpiredIx({
-        crank: publicKey,
-        host: new PublicKey(room.hostWallet),
-        challenger: new PublicKey(room.challengerWallet),
-        duelId: BigInt(room.duelId),
-      }),
-    );
+    if (!address || !room?.challengerWallet) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await duel.refundExpired(BigInt(room.duelId));
+      await load();
+    } catch (e) {
+      setError(explainChainError(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function rematch() {
-    if (!publicKey || !room) return;
+    if (!address || !room) return;
     if (!profile) {
       setError("Bind your identity first");
       return;
     }
     const n = Number(rematchWager);
-    if (!Number.isFinite(n) || n < MIN_WAGER_SOL || n > MAX_WAGER_SOL) {
-      setError(`Wager must be ${MIN_WAGER_SOL}–${MAX_WAGER_SOL} SOL`);
+    if (!Number.isFinite(n) || n < MIN_WAGER_ETH || n > MAX_WAGER_ETH) {
+      setError(`Wager must be ${MIN_WAGER_ETH}–${MAX_WAGER_ETH} ETH`);
       return;
     }
-    const lamports = solToLamports(n);
+    const wei = ethToWei(n);
     setBusy(true);
     setError(null);
     try {
-      const duelId =
-        BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
-      const { duel, ix } = createDuelIx({
-        host: publicKey,
-        duelId,
-        wagerLamports: lamports,
-      });
-      const sig = await sendIxs({ connection, wallet, ixs: [ix] });
+      const { hash, id } = await duel.createDuel({ wagerWei: wei, tokenId: 0n });
       const json = await postJson<{ room?: { id: string } }>("/api/rooms", {
-        pda: duel.toBase58(),
-        duelId: duelId.toString(),
-        hostWallet: publicKey.toBase58(),
-        wagerLamports: lamports.toString(),
-        createSignature: sig,
+        pda: id,
+        duelId: id,
+        hostWallet: address,
+        wagerLamports: wei.toString(),
+        createSignature: hash,
         rematchOf: room.id,
         arena: rematchArena,
       });
       if (!json.room) throw new Error("Rematch record failed");
       setRematchOpen(false);
-      router.push(`/duel/${duel.toBase58()}`);
+      router.push(`/duel/${id}`);
     } catch (e) {
       setError(explainChainError(e));
     } finally {
@@ -392,21 +394,15 @@ export function DuelArena({ pda }: { pda: string }) {
   }
 
   async function joinRematch() {
-    if (!publicKey || !data?.rematch) return;
+    if (!address || !data?.rematch) return;
     const next = data.rematch;
     setBusy(true);
     setError(null);
     try {
-      const sig = await sendIxs({
-        connection,
-        wallet,
-        ixs: [
-          joinDuelIx({
-            challenger: publicKey,
-            host: new PublicKey(next.hostWallet),
-            duelId: BigInt(next.duelId),
-          }),
-        ],
+      const sig = await duel.joinDuel({
+        duelId: BigInt(next.duelId),
+        tokenId: 0n,
+        wagerWei: BigInt(next.wagerLamports),
       });
       try {
         await fetch(`/api/rooms/${next.pda}`, {
@@ -429,7 +425,7 @@ export function DuelArena({ pda }: { pda: string }) {
     return <div className="empty">Loading duel from Neon + chain…</div>;
   }
 
-  const wagerSol = Number(room.wagerLamports) / 1e9;
+  const wagerEth = Number(room.wagerLamports) / 1e18;
   const pot = BigInt(room.wagerLamports) * 2n;
   const winner = room.winnerWallet ?? previewWinner;
   const youWon = winner && me === winner;
@@ -437,14 +433,18 @@ export function DuelArena({ pda }: { pda: string }) {
   const proofHash = room.slotHash || slot?.preview?.slotHash || null;
   const rematchOffer = data.rematch ?? null;
   const canRematch =
-    inDuel && Boolean(publicKey && profile) && (settled || room.status === "refunded");
-  const lastWagerSol = solInputFromLamports(room.wagerLamports);
-  const rematchChips = [...new Set([lastWagerSol, "0.01", "0.05", "0.1", "0.25", "1"])];
+    inDuel && Boolean(address && profile) && (settled || room.status === "refunded");
+  const lastWagerEth = ethInputFromWei(room.wagerLamports);
+  const rematchChips = [...new Set([lastWagerEth, "0.01", "0.05", "0.1", "0.25", "1"])];
   const arena = data?.arena ?? arenaForSeed(room?.id ?? pda);
+  const hostTone = characterTone(data.host, arena.hostSkin);
+  const guestTone = characterTone(data.challenger, arena.guestSkin);
+  const nftStake = isNftId(room.hostNftId);
+  const ethStake = BigInt(room.wagerLamports) > 0n;
 
   function openRematch() {
     setError(null);
-    setRematchWager(lastWagerSol);
+    setRematchWager(lastWagerEth);
     setRematchArena(arena.id);
     setRematchOpen(true);
   }
@@ -472,7 +472,9 @@ export function DuelArena({ pda }: { pda: string }) {
             you={isHost}
             winner={winner === room.hostWallet}
             accent={arena.hostAccent}
-            dieTone={arena.hostSkin}
+            dieTone={hostTone}
+            nftTokenId={data.host?.nftTokenId}
+            stakedNftId={room.hostNftId}
           />
           <PlayerCard
             title="Challenger"
@@ -483,8 +485,10 @@ export function DuelArena({ pda }: { pda: string }) {
             you={isChallenger}
             winner={Boolean(winner && winner === room.challengerWallet)}
             accent={arena.guestAccent}
-            dieTone={arena.guestSkin}
+            dieTone={guestTone}
             vacant={!data.challenger}
+            nftTokenId={data.challenger?.nftTokenId}
+            stakedNftId={room.challengerNftId}
           />
 
           <motion.div className="panel bet-box arena-v2-panel" variants={stagger.item}>
@@ -492,20 +496,20 @@ export function DuelArena({ pda }: { pda: string }) {
             <dl>
               <div>
                 <dt>Each wager</dt>
-                <dd className="gold">{formatSol(room.wagerLamports)}</dd>
+                <dd className="gold">{formatEth(room.wagerLamports)}</dd>
               </div>
               <div>
                 <dt>Pot</dt>
                 <dd className="gold pot-value">
                   <AnimatedNumber
-                    value={waiting ? Number(room.wagerLamports) / 1e9 : Number(pot) / 1e9}
-                    format={(n) => `${n.toFixed(4)} SOL`}
+                    value={waiting ? Number(room.wagerLamports) / 1e18 : Number(pot) / 1e18}
+                    format={(n) => `${n.toFixed(4)} ETH`}
                   />
                 </dd>
               </div>
               <div>
                 <dt>USD each</dt>
-                <dd>{formatUsd(wagerSol, price)}</dd>
+                <dd>{formatUsd(wagerEth, price)}</dd>
               </div>
               <div>
                 <dt>House fee</dt>
@@ -514,11 +518,11 @@ export function DuelArena({ pda }: { pda: string }) {
             </dl>
             <a
               className="bd-pda"
-              href={explorerAccount(room.id)}
+              href={explorerAccount(DUEL_ADDRESS)}
               target="_blank"
               rel="noreferrer"
             >
-              PDA {shortKey(room.id, 4, 4)}
+              Duel #{room.id}
             </a>
           </motion.div>
           </motion.div>
@@ -531,8 +535,8 @@ export function DuelArena({ pda }: { pda: string }) {
             won={Boolean(announced && winner)}
             potLabel={
               waiting
-                ? formatSol(room.wagerLamports)
-                : `${(Number(pot) / 1e9).toFixed(4)} SOL`
+                ? formatEth(room.wagerLamports)
+                : `${(Number(pot) / 1e18).toFixed(4)} ETH`
             }
           >
             {announced && winner ? (
@@ -554,7 +558,7 @@ export function DuelArena({ pda }: { pda: string }) {
                   {winner === room.hostWallet
                     ? data.host?.username ?? shortKey(winner)
                     : data.challenger?.username ?? shortKey(winner)}{" "}
-                  · {formatSol(pot.toString())}
+                  · {formatEth(pot.toString())}
                 </p>
                 {payingOut ? (
                   <p className="muted">Sending the pot on-chain…</p>
@@ -564,13 +568,13 @@ export function DuelArena({ pda }: { pda: string }) {
               <div className="wait-copy">
                 <p className="kicker">Reveal in</p>
                 <SlotCountdown
-                  slotsLeft={slotsLeft ?? REVEAL_DELAY_SLOTS}
-                  total={REVEAL_DELAY_SLOTS}
+                  slotsLeft={slotsLeft ?? REVEAL_DELAY_BLOCKS}
+                  total={REVEAL_DELAY_BLOCKS}
                 />
                 <p className="muted">
-                  Current slot {slot?.slot?.toLocaleString()} · committed{" "}
+                  Current block {slot?.slot?.toLocaleString()} · reveal{" "}
                   {room.revealSlot ? (
-                    <a href={explorerSlot(room.revealSlot)} target="_blank" rel="noreferrer">
+                    <a href={explorerBlock(room.revealSlot)} target="_blank" rel="noreferrer">
                       {room.revealSlot}
                     </a>
                   ) : (
@@ -586,7 +590,7 @@ export function DuelArena({ pda }: { pda: string }) {
             ) : hashReady && !announced ? (
               <div className="wait-copy">
                 <h2>Hash landed</h2>
-                <p className="muted">Dice are rolling from the slot hash.</p>
+                <p className="muted">Dice are rolling from the reveal blockhash.</p>
               </div>
             ) : null}
 
@@ -595,7 +599,7 @@ export function DuelArena({ pda }: { pda: string }) {
                 className={`duel-die-slot accent-host${isHost ? " is-you" : ""}${locked && !showRolls && !expired ? " is-rolling" : ""}${announced && winner === room.hostWallet ? " is-winner-slot" : ""}`}
               >
                 <DiceFace
-                  tone={arena.hostSkin}
+                  tone={hostTone}
                   value={showRolls ? hostRoll : null}
                   idle={waiting}
                   rolling={!showRolls && locked && !expired}
@@ -614,7 +618,7 @@ export function DuelArena({ pda }: { pda: string }) {
               >
                 {data.challenger ? (
                   <DiceFace
-                    tone={arena.guestSkin}
+                    tone={guestTone}
                     value={showRolls ? challengerRoll : null}
                     idle={waiting}
                     rolling={!showRolls && locked && !expired}
@@ -635,7 +639,9 @@ export function DuelArena({ pda }: { pda: string }) {
                     <span className="die-label">
                       {isHost
                         ? "Open seat"
-                        : `Join · match ${formatSol(room.wagerLamports)}`}
+                        : nftStake && !ethStake
+                          ? "Join · match NFT"
+                          : `Join · match ${formatEth(room.wagerLamports)}`}
                     </span>
                   </button>
                 )}
@@ -655,10 +661,10 @@ export function DuelArena({ pda }: { pda: string }) {
                     <dd>{challengerRoll ?? "—"}</dd>
                   </div>
                   <div>
-                    <dt>Reveal slot</dt>
+                    <dt>Reveal block</dt>
                     <dd>
                       {room.revealSlot ? (
-                        <a href={explorerSlot(room.revealSlot)} target="_blank" rel="noreferrer">
+                        <a href={explorerBlock(room.revealSlot)} target="_blank" rel="noreferrer">
                           {room.revealSlot}
                         </a>
                       ) : (
@@ -667,7 +673,7 @@ export function DuelArena({ pda }: { pda: string }) {
                     </dd>
                   </div>
                   <div>
-                    <dt>Slot hash</dt>
+                    <dt>Blockhash</dt>
                     <dd className="proof-hash">{proofHash ?? "—"}</dd>
                   </div>
                   <div>
@@ -692,8 +698,17 @@ export function DuelArena({ pda }: { pda: string }) {
 
             <div className="table-actions arena-v2-actions">
               {waiting && !isHost ? (
-                publicKey && profile ? (
-                  <CoolBtn
+                address && profile ? (
+                  <>
+                    {nftStake ? (
+                      <NftPicker
+                        value={joinNft}
+                        onChange={setJoinNft}
+                        allowNone={false}
+                        label="Stake your matching dice NFT"
+                      />
+                    ) : null}
+                    <CoolBtn
                     variant="join"
                     pulse={!busy}
                     disabled={busy}
@@ -701,16 +716,25 @@ export function DuelArena({ pda }: { pda: string }) {
                   >
                     {busy
                       ? "Matching on-chain…"
-                      : `Join & wager ${formatSol(room.wagerLamports)}`}
+                      : nftStake && !ethStake
+                        ? "Join · stake a matching dice NFT"
+                        : `Join & wager ${formatEth(room.wagerLamports)}`}
                   </CoolBtn>
-                ) : publicKey ? (
+                  </>
+                ) : address ? (
                   <p className="muted">Pick a username to lock your wager.</p>
                 ) : (
                   <WalletButton />
                 )
               ) : null}
               {waiting && isHost ? (
-                <p className="muted">Share this page — opponent matches {formatSol(room.wagerLamports)} to start.</p>
+                <p className="muted">
+                  Share this page — opponent matches{" "}
+                  {nftStake && !ethStake
+                    ? "your dice NFT"
+                    : formatEth(room.wagerLamports)}
+                  {nftStake && ethStake ? " and a dice NFT" : ""} to start.
+                </p>
               ) : null}
             </div>
 
@@ -758,7 +782,7 @@ export function DuelArena({ pda }: { pda: string }) {
         >
           {busy && waiting && !isHost
             ? "Joining…"
-            : `Join · ${formatSol(room.wagerLamports)}`}
+            : `Join · ${formatEth(room.wagerLamports)}`}
         </button>
         <button
           type="button"
@@ -793,7 +817,7 @@ export function DuelArena({ pda }: { pda: string }) {
           {rematchOffer && rematchOffer.hostWallet !== me ? (
             <>
               <CoolBtn disabled={busy} pulse={!busy} onClick={() => void joinRematch()}>
-                {busy ? "Joining…" : `Join rematch · ${formatSol(rematchOffer.wagerLamports)}`}
+                {busy ? "Joining…" : `Join rematch · ${formatEth(rematchOffer.wagerLamports)}`}
               </CoolBtn>
               <CoolBtn variant="ghost" disabled={busy} onClick={openRematch}>
                 Different wager
@@ -814,15 +838,15 @@ export function DuelArena({ pda }: { pda: string }) {
           <p className="kicker">Rematch</p>
           <h2>Set the wager</h2>
           <p className="muted">
-            Last round was {formatSol(room.wagerLamports)}. Keep it or lock a
+            Last round was {formatEth(room.wagerLamports)}. Keep it or lock a
             different amount. Opponent matches whatever you set.
           </p>
           <label className="field">
-            <span>Wager (SOL)</span>
+            <span>Wager (ETH)</span>
             <input
               type="number"
-              min={MIN_WAGER_SOL}
-              max={MAX_WAGER_SOL}
+              min={MIN_WAGER_ETH}
+              max={MAX_WAGER_ETH}
               step="0.001"
               value={rematchWager}
               onChange={(e) => setRematchWager(e.target.value)}
@@ -837,7 +861,7 @@ export function DuelArena({ pda }: { pda: string }) {
                 className={`chip${v === rematchWager ? " is-on" : ""}`}
                 onClick={() => setRematchWager(v)}
               >
-                {v} SOL{v === lastWagerSol ? " · last" : ""}
+                {v} ETH{v === lastWagerEth ? " · last" : ""}
               </button>
             ))}
           </div>
@@ -847,7 +871,7 @@ export function DuelArena({ pda }: { pda: string }) {
               Back
             </CoolBtn>
             <CoolBtn disabled={busy} pulse={!busy} onClick={() => void rematch()}>
-              {busy ? "Opening…" : `Lock ${rematchWager || "—"} SOL`}
+              {busy ? "Opening…" : `Lock ${rematchWager || "—"} ETH`}
             </CoolBtn>
           </div>
         </div>
@@ -855,12 +879,6 @@ export function DuelArena({ pda }: { pda: string }) {
     ) : null}
     </>
   );
-}
-
-function solInputFromLamports(lamports: string) {
-  const n = Number(lamports) / 1e9;
-  if (!Number.isFinite(n) || n <= 0) return "0.05";
-  return n.toFixed(6).replace(/\.?0+$/, "");
 }
 
 function PlayerCard({
@@ -874,9 +892,11 @@ function PlayerCard({
   accent = "var(--ember)",
   dieTone,
   vacant = false,
+  nftTokenId,
+  stakedNftId,
 }: {
   title: string;
-  profile: { username: string } | null;
+  profile: { username: string; nftTokenId?: string | null } | null;
   wallet: string | null;
   roll: number | null;
   wins: number;
@@ -885,8 +905,11 @@ function PlayerCard({
   accent?: string;
   dieTone?: string;
   vacant?: boolean;
+  nftTokenId?: string | null;
+  stakedNftId?: string | null;
 }) {
   const name = profile?.username ?? (wallet ? shortKey(wallet) : "Empty");
+  const characterId = nftTokenId ?? profile?.nftTokenId ?? null;
   return (
     <motion.div
       variants={stagger.item}
@@ -911,6 +934,10 @@ function PlayerCard({
         </div>
         {winner ? <span className="bd-crown">♛</span> : null}
       </div>
+      <DiceNftBadge tokenId={characterId} staked={Boolean(stakedNftId && stakedNftId === characterId)} />
+      {stakedNftId && stakedNftId !== characterId ? (
+        <DiceNftBadge tokenId={stakedNftId} staked />
+      ) : null}
       {vacant ? (
         <div className="bd-open-seat">
           <span>+</span>

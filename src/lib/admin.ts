@@ -7,12 +7,12 @@ function splitList(raw: string | undefined) {
 
 export function adminAllowlist() {
   if (typeof window !== "undefined") return [];
-  return [...new Set(splitList(process.env.ADMIN_WALLETS))];
+  return [...new Set(splitList(process.env.ADMIN_WALLETS).map((s) => s.toLowerCase()))];
 }
 
 export function isAdminWallet(wallet: string | null | undefined) {
   if (!wallet) return false;
-  return adminAllowlist().includes(wallet);
+  return adminAllowlist().includes(wallet.toLowerCase());
 }
 
 export function adminConfigured() {

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { fail, failInternal } from "@/lib/api";
+import { publicClient } from "@/lib/eth/client";
+import { deriveRolls, hashToHex } from "@/lib/eth/dice";
+import { currentBlock, fetchDuel, fetchRevealHash } from "@/lib/eth/fetch";
+import { isU256String } from "@/lib/eth/keys";
 import { limitOr429 } from "@/lib/rate-limit";
-import { isPubkeyString } from "@/lib/solana/keys";
+import { zeroAddress } from "viem";
 
 export const runtime = "nodejs";
 
@@ -11,28 +15,21 @@ export async function GET(req: Request) {
     if (limited) return limited;
     const url = new URL(req.url);
     const pda = url.searchParams.get("pda");
-    if (pda && !isPubkeyString(pda)) return fail("invalid room");
+    if (pda && !isU256String(pda)) return fail("invalid room");
 
-    const { PublicKey } = await import("@solana/web3.js");
-    const { serverConnection } = await import("@/lib/solana/connection");
-    const { fetchRevealHash, currentSlot, fetchDuel } = await import(
-      "@/lib/solana/fetch"
-    );
-    const { deriveRolls, hashToHex } = await import("@/lib/solana/dice");
-
-    const connection = serverConnection();
-    const slot = await currentSlot(connection);
+    const client = publicClient();
+    const slot = await currentBlock(client);
 
     if (!pda) {
       return NextResponse.json({ slot });
     }
 
-    const onchain = await fetchDuel(connection, new PublicKey(pda));
+    const onchain = await fetchDuel(client, pda);
     if (!onchain) {
       return NextResponse.json({ slot, onchain: null });
     }
 
-    const revealSlot = onchain.revealSlot;
+    const revealSlot = onchain.revealBlock;
     let preview: {
       hostRoll: number;
       challengerRoll: number;
@@ -43,18 +40,18 @@ export async function GET(req: Request) {
     let hashReady = false;
 
     if (revealSlot > 0n) {
-      const found = await fetchRevealHash(connection, revealSlot);
+      const found = await fetchRevealHash(client, revealSlot);
       expired = found.expired;
       if (found.entry) {
         hashReady = true;
         try {
           const rolls = deriveRolls({
-            slotHash: found.entry.hash,
-            duel: new PublicKey(pda),
+            entropy: found.entry.hash,
+            duelId: pda,
             host: onchain.host,
             challenger: onchain.challenger,
-            wagerLamports: onchain.wagerLamports,
-            revealSlot: found.entry.slot,
+            wagerWei: onchain.wagerWei,
+            revealBlock: found.entry.slot,
           });
           preview = {
             hostRoll: rolls.hostRoll,
@@ -71,7 +68,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       slot,
       revealSlot: revealSlot.toString(),
-      commitSlot: onchain.commitSlot.toString(),
+      commitSlot: onchain.commitBlock.toString(),
       status: onchain.status,
       hashReady,
       expired,
@@ -79,9 +76,9 @@ export async function GET(req: Request) {
       hostRoll: onchain.hostRoll || null,
       challengerRoll: onchain.challengerRoll || null,
       winner:
-        onchain.winner.toBase58() === PublicKey.default.toBase58()
+        onchain.winner.toLowerCase() === zeroAddress
           ? null
-          : onchain.winner.toBase58(),
+          : onchain.winner.toLowerCase(),
     });
   } catch (e) {
     return failInternal("slot", e);

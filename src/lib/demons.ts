@@ -26,12 +26,12 @@ export const DEMONS = [
   {
     id: "night-coil",
     name: "Locked In",
-    blurb: "Eyes on the next slot.",
+    blurb: "Eyes on the next block.",
     accent: "#9aff5c",
   },
   {
     id: "pyre-imp",
-    name: "Sol Flare",
+    name: "Block Flare",
     blurb: "Small. Bright. Mean.",
     accent: "#e879f9",
   },

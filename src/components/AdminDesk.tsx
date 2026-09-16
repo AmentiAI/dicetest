@@ -2,12 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useEthWallet } from "@/lib/eth/wallet";
 import { adminAuthMessage } from "@/lib/auth";
-import { bytesToBase64 } from "@/lib/base64";
-import { formatSol, shortKey } from "@/lib/format";
+import { formatEth, shortKey } from "@/lib/format";
 import { postJson, requestJson } from "@/lib/http";
-import { explorerAccount, explorerTx } from "@/lib/solana/constants";
+import { explorerAccount, explorerTx } from "@/lib/eth/constants";
 import { WalletButton } from "./WalletButton";
 
 type TxKind = "create" | "join" | "settle";
@@ -105,8 +104,8 @@ function when(iso: string) {
 }
 
 export function AdminDesk() {
-  const { publicKey, signMessage } = useWallet();
-  const me = publicKey?.toBase58() ?? null;
+  const { address, signMessage } = useEthWallet();
+  const me = address;
   const [data, setData] = useState<AdminPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
@@ -140,11 +139,11 @@ export function AdminDesk() {
       }
       const ts = Date.now();
       const message = adminAuthMessage(me, ts);
-      const sig = await signMessage(new TextEncoder().encode(message));
+      const sig = await signMessage(message);
       const json = await postJson<{ token: string }>("/api/admin", {
         wallet: me,
         ts,
-        signatureBase64: bytesToBase64(new Uint8Array(sig)),
+        signatureBase64: sig,
       });
       sessionStorage.setItem(storageKey, json.token);
       return json.token;
@@ -329,8 +328,8 @@ export function AdminDesk() {
         <Kpi label="Joins" value={stats?.joins ?? "—"} />
         <Kpi label="Settles" value={stats?.settles ?? "—"} />
         <Kpi label="Waiting" value={stats?.waiting ?? "—"} />
-        <Kpi label="Locked pot" value={stats ? formatSol(stats.lockedLamports) : "—"} />
-        <Kpi label="Settled volume" value={stats ? formatSol(stats.settledLamports) : "—"} />
+        <Kpi label="Locked pot" value={stats ? formatEth(stats.lockedLamports) : "—"} />
+        <Kpi label="Settled volume" value={stats ? formatEth(stats.settledLamports) : "—"} />
         <Kpi label="Players" value={stats?.players ?? "—"} />
       </div>
 
@@ -356,7 +355,7 @@ export function AdminDesk() {
         </div>
         <input
           className="admin-search"
-          placeholder="Search wallet, signature, PDA, hash…"
+          placeholder="Search wallet, signature, duel id, hash…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -445,7 +444,7 @@ export function AdminDesk() {
                         <span className={`badge ${tx.status}`}>{tx.status}</span>
                       </div>
                     </td>
-                    <td>{formatSol(tx.wagerLamports)}</td>
+                    <td>{formatEth(tx.wagerLamports)}</td>
                     <td className="mono">
                       <a href={explorerAccount(tx.hostWallet)} target="_blank" rel="noreferrer">
                         {shortKey(tx.hostWallet)}
@@ -494,7 +493,7 @@ export function AdminDesk() {
               <tr>
                 <th>Updated</th>
                 <th>Status</th>
-                <th>PDA</th>
+                <th>Duel</th>
                 <th>Wager</th>
                 <th>Host</th>
                 <th>Challenger</th>
@@ -512,7 +511,7 @@ export function AdminDesk() {
                   <td className="mono">
                     <Link href={`/duel/${r.id}`}>{shortKey(r.id, 6, 6)}</Link>
                   </td>
-                  <td>{formatSol(r.wagerLamports)}</td>
+                  <td>{formatEth(r.wagerLamports)}</td>
                   <td className="mono">{shortKey(r.hostWallet)}</td>
                   <td className="mono">
                     {r.challengerWallet ? shortKey(r.challengerWallet) : "—"}
@@ -574,7 +573,7 @@ export function AdminDesk() {
                   <td>{p.demon}</td>
                   <td>{p.wins}</td>
                   <td>{p.losses}</td>
-                  <td>{formatSol(p.volumeLamports)}</td>
+                  <td>{formatEth(p.volumeLamports)}</td>
                   <td className="mono">{when(p.updatedAt)}</td>
                 </tr>
               ))}
