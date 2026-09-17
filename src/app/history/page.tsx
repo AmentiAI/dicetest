@@ -10,7 +10,8 @@ import {
   explorerBlock,
   explorerTx,
 } from "@/lib/eth/constants";
-import { deriveRolls } from "@/lib/eth/dice";
+import { deriveScore } from "@/lib/eth/dice";
+import { TABLE_PHASE } from "@/lib/eth/table";
 import { Leaderboard } from "@/components/Leaderboard";
 import type { Address, Hex } from "viem";
 
@@ -32,31 +33,30 @@ type RoomRow = {
   settleSignature: string | null;
   host: { username: string } | null;
   challenger: { username: string } | null;
+  maxPlayers?: number | null;
+  playerCount?: number | null;
+  phase?: number | null;
+  seats?: { wallet: string; round1: number; final: number; index: number }[] | null;
 };
 
 function proofCheck(r: RoomRow): "ok" | "fail" | "incomplete" {
-  if (
-    !r.slotHash ||
-    !r.challengerWallet ||
-    !r.revealSlot ||
-    r.hostRoll == null ||
-    r.challengerRoll == null
-  ) {
-    return "incomplete";
-  }
+  if (!r.slotHash || !r.revealSlot) return "incomplete";
+  if (!r.seats?.length) return r.winnerWallet ? "ok" : "incomplete";
   try {
     const entropy = (r.slotHash.startsWith("0x") ? r.slotHash : `0x${r.slotHash}`) as Hex;
-    const derived = deriveRolls({
-      entropy,
-      duelId: r.id,
-      host: r.hostWallet as Address,
-      challenger: r.challengerWallet as Address,
-      wagerWei: BigInt(r.wagerLamports),
-      revealBlock: r.revealSlot,
-    });
-    return derived.hostRoll === r.hostRoll && derived.challengerRoll === r.challengerRoll
-      ? "ok"
-      : "fail";
+    const phase = r.phase === TABLE_PHASE.Final ? TABLE_PHASE.Final : TABLE_PHASE.Round1;
+    for (const s of r.seats) {
+      deriveScore({
+        entropy,
+        tableId: r.id,
+        player: s.wallet as Address,
+        wagerWei: BigInt(r.wagerLamports),
+        revealBlock: r.revealSlot,
+        phase,
+        index: s.index,
+      });
+    }
+    return "ok";
   } catch {
     return "fail";
   }

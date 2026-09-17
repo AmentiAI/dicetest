@@ -40,6 +40,7 @@ export const MIN_WAGER_ETH = 0.0001;
 export const MAX_WAGER_ETH = 50;
 export const REVEAL_DELAY_BLOCKS = 3;
 export const HASH_WINDOW = 256;
+export { MIN_PLAYERS, MAX_PLAYERS, FINALISTS, TABLE_PHASE } from "./table";
 
 export const WEI_PER_ETH = 10n ** 18n;
 

@@ -3770,6 +3770,8 @@ code {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: min(72vh, 820px);
+  overflow: auto;
 }
 .arena-v2-panel {
   padding: 22px 20px !important;
@@ -4171,6 +4173,17 @@ code {
   position: relative;
   z-index: 2;
   align-items: stretch;
+}
+.duel-dice-grid.is-table {
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  width: min(100%, 820px);
+  gap: 12px;
+}
+.duel-die-slot.is-out {
+  opacity: 0.45;
+}
+.arena-v2-player.is-out {
+  opacity: 0.55;
 }
 .duel-die-slot {
   position: relative;

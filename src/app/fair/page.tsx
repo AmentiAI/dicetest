@@ -15,38 +15,40 @@ export default function FairPage() {
       <p className="dash-eyebrow">Provably fair</p>
       <h1>We don&apos;t roll the dice. Ethereum does.</h1>
       <p className="fair-lead">
-        The website cannot pick a winner. After both players lock their bets, a
+        The website cannot pick a winner. After the host starts the table, a
         future Ethereum block — a public number nobody has seen yet — becomes
-        the two dice. Anyone can check it later.
+        every player&apos;s die. Anyone can check it later.
       </p>
 
       <ol className="fair-steps">
         <li>
-          <strong>You both lock in</strong>
+          <strong>You sit, then the host starts</strong>
           <span>
-            ETH or an NFT goes into the match contract. Until both sides are in,
-            nothing is rolled.
+            ETH or an NFT goes into the table contract. 1v1 up to 10 seats.
+            The host can start with any number of players once at least two
+            are in. Nothing is rolled until they confirm.
           </span>
         </li>
         <li>
           <strong>Wait {REVEAL_DELAY_BLOCKS} new blocks</strong>
           <span>
             Ethereum keeps adding blocks. The result is hidden during this wait,
-            so nobody can peek and cancel.
+            so nobody can peek and leave.
           </span>
         </li>
         <li>
-          <strong>That later block is the roll</strong>
+          <strong>That later block is every roll</strong>
           <span>
             Every block has a fingerprint (a hash). We turn that fingerprint
-            into two dice, 1 through 6. Higher roll takes the pot.
+            into a die 1 through 6 for each player. Highest roll wins the pot.
           </span>
         </li>
         <li>
-          <strong>Ties try again from the same hash</strong>
+          <strong>Six or more players: top 5 go to a final</strong>
           <span>
-            If both dice match, we mix the hash one more time until someone
-            wins. No extra luck from the server.
+            The five highest rolls advance. They wait three more blocks and
+            roll again. Winner takes the whole pot. Ties on a face use extra
+            bits of the same hash — no extra luck from the server.
           </span>
         </li>
       </ol>
@@ -55,9 +57,10 @@ export default function FairPage() {
         <article>
           <h2>Why you can&apos;t cheat</h2>
           <p>
-            When you lock, the winning block does not exist yet. You cannot
-            pick a lucky number, and neither can we. If that block gets too old
-            (past {HASH_WINDOW} blocks), both players get their money back.
+            When the host starts, the winning block does not exist yet. You
+            cannot pick a lucky number, and neither can we. If that block gets
+            too old (past {HASH_WINDOW} blocks), everyone at the table gets
+            their money back.
           </p>
         </article>
         <article>
@@ -80,15 +83,14 @@ export default function FairPage() {
       <details className="fair-recipe">
         <summary>The exact recipe (optional)</summary>
         <p className="muted">
-          Mix the block hash with the match id, both wallets, the wager, and a
-          counter. Take the first two bytes. Each byte becomes a die (1–6).
-          Bytes that would bias the die are skipped. Same inputs always make
-          the same dice.
+          Mix the block hash with the table id, your wallet, the wager, the
+          round, your seat, and a counter. Take the first byte as a die (1–6).
+          Remaining bits break ties. Same inputs always make the same ranking.
         </p>
-        <pre className="hash-box">{`hash = keccak256(block + match + both players + bet + counter)
-your die      = 1–6 from the first byte
-their die     = 1–6 from the second byte
-if tied       = add 1 to counter and mix again`}</pre>
+        <pre className="hash-box">{`hash = keccak256(block + table + you + bet + round + seat + counter)
+your die   = 1–6 from the first byte
+if 6+ sit  = top 5 advance, mix a later block for the final
+winner     = highest die, hash bits break ties`}</pre>
       </details>
 
       <p className="fair-meta muted">

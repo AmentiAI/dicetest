@@ -23,9 +23,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Roll the Block — whitelist",
+  title: "Roll the Block",
   description:
-    "Play is locked. 1,800 whitelist slots. Connect an ETH wallet and your X handle. Slow Roll dice revealed later.",
+    "Provably fair ETH dice. 1v1 to 10-player free-for-all. Bet ETH or your Slow Roll die. Winner takes the pot.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

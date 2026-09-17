@@ -5,6 +5,7 @@ import { publicClient } from "./eth/client";
 import { fetchDuel, statusName } from "./eth/fetch";
 import { hashToHex } from "./eth/dice";
 import { isU256String } from "./eth/keys";
+import { TABLE_PHASE, type TableSeat } from "./eth/table";
 import { zeroAddress } from "viem";
 
 export async function syncRoomFromChain(pda: string, opts?: { force?: boolean }) {
@@ -37,22 +38,20 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
   }
 
   const nextStatus = statusName(onchain.status);
-  const challenger =
-    onchain.challenger.toLowerCase() === zeroAddress
-      ? null
-      : onchain.challenger.toLowerCase();
+  const seats = onchain.seats;
+  const challenger = seats[1]?.wallet ?? null;
   const winner =
-    onchain.winner.toLowerCase() === zeroAddress
-      ? null
-      : onchain.winner.toLowerCase();
+    onchain.winner.toLowerCase() === zeroAddress ? null : onchain.winner.toLowerCase();
+  const hostRoll = onchain.hostRoll || null;
+  const guestRoll = onchain.challengerRoll || null;
 
   const patch = {
     status: nextStatus,
     challengerWallet: challenger,
     commitSlot: onchain.commitBlock === 0n ? null : onchain.commitBlock.toString(),
     revealSlot: onchain.revealBlock === 0n ? null : onchain.revealBlock.toString(),
-    hostRoll: onchain.hostRoll || null,
-    challengerRoll: onchain.challengerRoll || null,
+    hostRoll,
+    challengerRoll: guestRoll,
     winnerWallet: winner,
     slotHash:
       onchain.entropy && onchain.entropy !== "0x" + "00".repeat(32)
@@ -61,6 +60,10 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
     hostNftId: onchain.hostTokenId > 0n ? onchain.hostTokenId.toString() : null,
     challengerNftId:
       onchain.challengerTokenId > 0n ? onchain.challengerTokenId.toString() : null,
+    maxPlayers: onchain.maxPlayers,
+    playerCount: onchain.playerCount,
+    phase: onchain.phase,
+    seats,
     updatedAt: new Date(),
   };
 
@@ -68,10 +71,52 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
     await db().update(rooms).set(patch).where(eq(rooms.id, pda));
   }
 
+  if (existing && existing.status === "waiting" && nextStatus === "locked") {
+    await db().insert(matchEvents).values({
+      roomId: pda,
+      event: "started",
+      payload: {
+        playerCount: onchain.playerCount,
+        maxPlayers: onchain.maxPlayers,
+        revealSlot: onchain.revealBlock.toString(),
+      },
+    });
+    await db().insert(chatMessages).values({
+      roomId: pda,
+      wallet: "system",
+      username: "SYS",
+      kind: "system",
+      body:
+        onchain.playerCount > 5
+          ? `Host started with ${onchain.playerCount}. Top 5 advance, winner takes the pot.`
+          : `Host started a ${onchain.playerCount}-player table. Highest roll takes the pot.`,
+    });
+  }
+
+  if (
+    existing &&
+    existing.phase === TABLE_PHASE.Round1 &&
+    onchain.phase === TABLE_PHASE.Final
+  ) {
+    await db().insert(matchEvents).values({
+      roomId: pda,
+      event: "finalists",
+      payload: {
+        wallets: seats.filter((s) => s.advanced).map((s) => s.wallet),
+      },
+    });
+    await db().insert(chatMessages).values({
+      roomId: pda,
+      wallet: "system",
+      username: "SYS",
+      kind: "system",
+      body: "Top 5 are in the final. Winner takes the whole pot.",
+    });
+  }
+
   if (existing && existing.status !== "settled" && nextStatus === "settled" && winner) {
-    const host = onchain.host.toLowerCase();
-    const chal = onchain.challenger.toLowerCase();
-    const loser = winner === host ? chal : host;
+    const pot = (onchain.wagerWei * BigInt(onchain.playerCount)).toString();
+    const losers = seats.map((s) => s.wallet).filter((w) => w !== winner);
     await db()
       .update(profiles)
       .set({
@@ -80,24 +125,26 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
         updatedAt: new Date(),
       })
       .where(eq(profiles.wallet, winner));
-    await db()
-      .update(profiles)
-      .set({
-        losses: sql`${profiles.losses} + 1`,
-        volumeLamports: sql`(${profiles.volumeLamports}::numeric + ${onchain.wagerWei.toString()}::numeric)::text`,
-        updatedAt: new Date(),
-      })
-      .where(eq(profiles.wallet, loser));
+    for (const loser of losers) {
+      await db()
+        .update(profiles)
+        .set({
+          losses: sql`${profiles.losses} + 1`,
+          volumeLamports: sql`(${profiles.volumeLamports}::numeric + ${onchain.wagerWei.toString()}::numeric)::text`,
+          updatedAt: new Date(),
+        })
+        .where(eq(profiles.wallet, loser));
+    }
     await db().insert(matchEvents).values({
       roomId: pda,
       event: "settled",
       payload: {
         winner,
-        hostRoll: onchain.hostRoll,
-        challengerRoll: onchain.challengerRoll,
+        winnerRoll: onchain.winnerRoll,
+        seats,
         slotHash: hashToHex(onchain.entropy),
         revealSlot: onchain.revealBlock.toString(),
-        pot: (onchain.wagerWei * 2n).toString(),
+        pot,
       },
     });
     await db().insert(chatMessages).values({
@@ -111,4 +158,9 @@ export async function syncRoomFromChain(pda: string, opts?: { force?: boolean })
 
   const room = await db().query.rooms.findFirst({ where: eq(rooms.id, pda) });
   return { room: room ?? null, onchain };
+}
+
+export function seatedWallets(seats: TableSeat[] | null | undefined, fallback: string[]) {
+  const fromSeats = (seats ?? []).map((s) => s.wallet).filter(Boolean);
+  return [...new Set([...fromSeats, ...fallback.filter(Boolean)])];
 }

@@ -1,4 +1,4 @@
-export const PLAY_LOCKED = true;
+export const PLAY_LOCKED = false;
 export const WAITLIST_CAP = 1800;
 export const NFT_PAGE_SIZE = 12;
 

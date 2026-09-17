@@ -95,7 +95,7 @@ export function ChatPanel({ roomId }: { roomId: string }) {
       <div className="chat-log" ref={scroller}>
         {chat.length === 0 ? (
           <p className="sys">
-            <b>Block Dice</b> Provably fair 1v1. Winner takes the pot.
+            <b>Block Dice</b> Provably fair tables. Winner takes the pot.
           </p>
         ) : (
           chat.map((m) => (

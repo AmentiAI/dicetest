@@ -57,10 +57,17 @@ export async function POST(req: Request, ctx: Ctx) {
 
     const room = await db().query.rooms.findFirst({ where: eq(rooms.id, id) });
     if (!room) return fail("room not found", 404);
-    const allowed =
-      walletNorm === room.hostWallet.toLowerCase() ||
-      walletNorm === room.challengerWallet?.toLowerCase();
-    if (!allowed) return fail("only duelists can chat", 403);
+    const seated = new Set(
+      [
+        room.hostWallet,
+        room.challengerWallet,
+        ...(room.seats ?? []).map((s) => s.wallet),
+      ]
+        .filter(Boolean)
+        .map((w) => w!.toLowerCase()),
+    );
+    const allowed = seated.has(walletNorm);
+    if (!allowed) return fail("only players at this table can chat", 403);
 
     const message = chatAuthMessage(id, wallet, text, ts);
     if (!(await verifyWalletSignature({ wallet, message, signatureBase64 }))) {

@@ -84,7 +84,7 @@ export function WaitlistHome() {
     <div className="dash-home waitlist-home">
       <section className="glass-panel dash-hero waitlist-hero">
         <div className="waitlist-copy">
-          <p className="dash-eyebrow">Play is locked</p>
+          <p className="dash-eyebrow">Slow Roll whitelist</p>
           <h1 className="dash-hero-title">
             ROLL THE <span className="dash-gradient-text">BLOCK</span>
           </h1>
@@ -106,12 +106,13 @@ export function WaitlistHome() {
             </li>
             <li>
               <strong>Your NFT is your game dice.</strong>
-              Equip it in a match. It rolls on the table and shows on the
-              leaderboard. Wager ETH or the die itself.
+              Equip it in a 1v1 or a free-for-all. It rolls on the table and
+              shows on the leaderboard. Wager ETH or the die itself.
             </li>
             <li>
               <strong>No house fee on games.</strong>
-              1v1 pots pay out in full. We don&apos;t take a cut of the match.
+              1v1 through free-for-all pots pay out in full. We don&apos;t take a
+              cut of the match.
             </li>
           </ul>
           <div className="waitlist-meter">

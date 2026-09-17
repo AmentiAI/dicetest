@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { fail, failInternal } from "@/lib/api";
 import { arenaForRoom } from "@/lib/arena-db";
@@ -9,6 +9,7 @@ import { hashToHex } from "@/lib/eth/dice";
 import { isTxHash, isU256String } from "@/lib/eth/keys";
 import { proofError, verifyProgramTx } from "@/lib/eth/verify-tx";
 import { limitOr429 } from "@/lib/rate-limit";
+import { seatedWallets } from "@/lib/sync";
 import { PLAY_LOCKED } from "@/lib/waitlist";
 import { zeroAddress } from "viem";
 
@@ -35,6 +36,15 @@ export async function GET(req: Request, ctx: Ctx) {
           where: eq(profiles.wallet, room.challengerWallet),
         })
       : null;
+    const seatWallets = seatedWallets(room.seats, [room.hostWallet, room.challengerWallet ?? ""]);
+    const seatedProfiles = seatWallets.length
+      ? await db().select().from(profiles).where(inArray(profiles.wallet, seatWallets))
+      : [];
+    const profileMap = Object.fromEntries(seatedProfiles.map((p) => [p.wallet, p]));
+    const players = (room.seats ?? []).map((s) => ({
+      ...s,
+      profile: profileMap[s.wallet] ?? null,
+    }));
 
     let rematch: {
       pda: string;
@@ -71,10 +81,14 @@ export async function GET(req: Request, ctx: Ctx) {
       arena,
       host: host ?? null,
       challenger: challenger ?? null,
+      players,
       rematch,
       onchain: onchain
         ? {
             status: onchain.status,
+            phase: onchain.phase,
+            maxPlayers: onchain.maxPlayers,
+            playerCount: onchain.playerCount,
             wagerLamports: onchain.wagerWei.toString(),
             commitSlot: onchain.commitBlock.toString(),
             revealSlot: onchain.revealBlock.toString(),
@@ -84,11 +98,13 @@ export async function GET(req: Request, ctx: Ctx) {
               onchain.winner.toLowerCase() === zeroAddress
                 ? null
                 : onchain.winner.toLowerCase(),
+            winnerRoll: onchain.winnerRoll,
             host: onchain.host.toLowerCase(),
             challenger:
               onchain.challenger.toLowerCase() === zeroAddress
                 ? null
                 : onchain.challenger.toLowerCase(),
+            seats: onchain.seats,
             slotHash: hashToHex(onchain.entropy),
             hostNftId: onchain.hostTokenId.toString(),
             challengerNftId: onchain.challengerTokenId.toString(),

@@ -15,12 +15,20 @@ import { PLAY_LOCKED } from "@/lib/waitlist";
 
 export const runtime = "nodejs";
 
-async function withProfiles<T extends { hostWallet: string; challengerWallet: string | null }>(
-  list: T[],
-) {
+async function withProfiles<
+  T extends {
+    hostWallet: string;
+    challengerWallet: string | null;
+    seats?: { wallet: string }[] | null;
+  },
+>(list: T[]) {
   const wallets = [
     ...new Set(
-      list.flatMap((r) => [r.hostWallet, r.challengerWallet].filter(Boolean) as string[]),
+      list.flatMap((r) =>
+        [r.hostWallet, r.challengerWallet, ...(r.seats ?? []).map((s) => s.wallet)].filter(
+          Boolean,
+        ) as string[],
+      ),
     ),
   ];
   const people = wallets.length
@@ -31,6 +39,10 @@ async function withProfiles<T extends { hostWallet: string; challengerWallet: st
     ...r,
     host: map[r.hostWallet] ?? null,
     challenger: r.challengerWallet ? map[r.challengerWallet] ?? null : null,
+    players: (r.seats ?? []).map((s) => ({
+      ...s,
+      profile: map[s.wallet] ?? null,
+    })),
   }));
 }
 
@@ -132,6 +144,10 @@ export async function POST(req: Request) {
         hostNftId: onchain.hostTokenId > 0n ? onchain.hostTokenId.toString() : null,
         status: statusName(onchain.status),
         createSignature,
+        maxPlayers: onchain.maxPlayers,
+        playerCount: onchain.playerCount,
+        phase: onchain.phase,
+        seats: onchain.seats,
       })
       .onConflictDoNothing();
 
@@ -158,16 +174,23 @@ export async function POST(req: Request) {
           program: DUEL_ADDRESS,
           arena,
           hostNftId: onchain.hostTokenId.toString(),
+          maxPlayers: onchain.maxPlayers,
         },
       });
+      const mode =
+        onchain.maxPlayers <= 2
+          ? "1v1"
+          : onchain.maxPlayers <= 5
+            ? `${onchain.maxPlayers}-player table`
+            : "free-for-all (up to 10)";
       await db().insert(chatMessages).values({
         roomId: pda,
         wallet: "system",
         username: "SYS",
         kind: "system",
         body: rematchOf
-          ? "Rematch circle. Stake is locked in the escrow. Winner takes all."
-          : "Circle opened. Stake is locked in the escrow contract. Winner takes all.",
+          ? `Rematch ${mode}. Host starts when ready. Winner takes the pot.`
+          : `${mode[0]!.toUpperCase()}${mode.slice(1)} opened. Others can join until the host starts. Winner takes the pot.`,
       });
     }
 
@@ -176,7 +199,8 @@ export async function POST(req: Request) {
       const allowed =
         prior &&
         (prior.hostWallet.toLowerCase() === host ||
-          prior.challengerWallet?.toLowerCase() === host);
+          prior.challengerWallet?.toLowerCase() === host ||
+          (prior.seats ?? []).some((s) => s.wallet.toLowerCase() === host));
       if (allowed) {
         const already = await db()
           .select()

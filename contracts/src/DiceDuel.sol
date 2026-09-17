@@ -6,14 +6,23 @@ interface IBlockDiceNft {
     function transferFrom(address from, address to, uint256 tokenId) external;
 }
 
-/// @notice 1v1 escrow. Stake ETH, a Block Dice NFT, or both. Winner takes the pot.
-/// Fairness: join locks revealBlock = block.number + 3, settle uses that blockhash.
+/// @notice 2–10 player escrow. Host starts at any filled count (≥2).
+/// If 6+ players, the 5 highest round-1 rolls advance; the final winner takes the pot.
+/// Fairness: start locks revealBlock = block.number + 3; settle uses that blockhash.
 contract DiceDuel {
     uint8 public constant WAITING = 0;
     uint8 public constant LOCKED = 1;
     uint8 public constant SETTLED = 2;
     uint8 public constant CANCELLED = 3;
     uint8 public constant REFUNDED = 4;
+
+    uint8 public constant PHASE_LOBBY = 0;
+    uint8 public constant PHASE_ROUND1 = 1;
+    uint8 public constant PHASE_FINAL = 2;
+
+    uint8 public constant MIN_PLAYERS = 2;
+    uint8 public constant MAX_PLAYERS = 10;
+    uint8 public constant FINALISTS = 5;
 
     uint64 public constant REVEAL_DELAY = 3;
     uint256 public constant MIN_WAGER = 0.0001 ether;
@@ -23,26 +32,39 @@ contract DiceDuel {
     IBlockDiceNft public immutable diceNft;
     uint256 public nextDuelId = 1;
 
-    struct Duel {
+    struct Table {
         address host;
-        address challenger;
         uint256 wagerWei;
-        uint256 hostTokenId;
-        uint256 challengerTokenId;
+        uint8 maxPlayers;
+        uint8 playerCount;
+        uint8 status;
+        uint8 phase;
         uint64 commitBlock;
         uint64 revealBlock;
-        uint8 hostRoll;
-        uint8 challengerRoll;
-        address winner;
         bytes32 entropy;
-        uint8 status;
+        address winner;
+        uint8 winnerRoll;
     }
 
-    mapping(uint256 => Duel) public duels;
+    mapping(uint256 => Table) public tables;
+    mapping(uint256 => address[MAX_PLAYERS]) internal _seats;
+    mapping(uint256 => uint256[MAX_PLAYERS]) internal _tokenIds;
+    mapping(uint256 => uint8[MAX_PLAYERS]) internal _round1;
+    mapping(uint256 => uint8[MAX_PLAYERS]) internal _finals;
+    mapping(uint256 => bool[MAX_PLAYERS]) internal _advanced;
 
-    event DuelCreated(uint256 indexed id, address indexed host, uint256 wagerWei, uint256 tokenId);
-    event DuelLocked(uint256 indexed id, address indexed challenger, uint64 revealBlock, uint256 tokenId);
-    event DuelSettled(uint256 indexed id, address indexed winner, uint8 hostRoll, uint8 challengerRoll, bytes32 entropy);
+    event TableCreated(
+        uint256 indexed id,
+        address indexed host,
+        uint256 wagerWei,
+        uint256 tokenId,
+        uint8 maxPlayers
+    );
+    event PlayerJoined(uint256 indexed id, address indexed player, uint256 tokenId, uint8 playerCount);
+    event PlayerLeft(uint256 indexed id, address indexed player, uint8 playerCount);
+    event MatchStarted(uint256 indexed id, uint8 playerCount, uint64 revealBlock);
+    event RoundSettled(uint256 indexed id, uint8 phase, bytes32 entropy);
+    event TableSettled(uint256 indexed id, address indexed winner, uint8 winnerRoll, bytes32 entropy);
     event DuelCancelled(uint256 indexed id);
     event DuelRefunded(uint256 indexed id);
 
@@ -50,132 +72,299 @@ contract DiceDuel {
     error BadWager();
     error BadStake();
     error BadNft();
-    error SelfJoin();
+    error BadMax();
+    error AlreadySeated();
+    error TableFull();
+    error NeedPlayers();
     error TooEarly();
     error Expired();
     error HashMissing();
     error TransferFailed();
     error NotHost();
+    error NotSeated();
 
     constructor(address nft) {
         diceNft = IBlockDiceNft(nft);
     }
 
-    function createDuel(uint256 tokenId) external payable returns (uint256 id) {
+    function createDuel(uint256 tokenId, uint8 maxPlayers) external payable returns (uint256 id) {
+        if (maxPlayers < MIN_PLAYERS || maxPlayers > MAX_PLAYERS) revert BadMax();
         if (msg.value != 0 && (msg.value < MIN_WAGER || msg.value > MAX_WAGER)) revert BadWager();
         if (msg.value == 0 && tokenId == 0) revert BadStake();
-        if (tokenId > 0) {
-            if (diceNft.ownerOf(tokenId) != msg.sender) revert BadNft();
-            diceNft.transferFrom(msg.sender, address(this), tokenId);
-        }
+        _pullNft(msg.sender, tokenId);
         id = nextDuelId++;
-        duels[id] = Duel({
+        tables[id] = Table({
             host: msg.sender,
-            challenger: address(0),
             wagerWei: msg.value,
-            hostTokenId: tokenId,
-            challengerTokenId: 0,
+            maxPlayers: maxPlayers,
+            playerCount: 1,
+            status: WAITING,
+            phase: PHASE_LOBBY,
             commitBlock: 0,
             revealBlock: 0,
-            hostRoll: 0,
-            challengerRoll: 0,
-            winner: address(0),
             entropy: bytes32(0),
-            status: WAITING
+            winner: address(0),
+            winnerRoll: 0
         });
-        emit DuelCreated(id, msg.sender, msg.value, tokenId);
+        _seats[id][0] = msg.sender;
+        _tokenIds[id][0] = tokenId;
+        emit TableCreated(id, msg.sender, msg.value, tokenId, maxPlayers);
     }
 
     function joinDuel(uint256 id, uint256 tokenId) external payable {
-        Duel storage d = duels[id];
-        if (d.status != WAITING) revert BadStatus();
-        if (msg.sender == d.host) revert SelfJoin();
-        if (msg.value != d.wagerWei) revert BadWager();
-        if (d.hostTokenId > 0) {
+        Table storage t = tables[id];
+        if (t.status != WAITING) revert BadStatus();
+        if (t.playerCount >= t.maxPlayers) revert TableFull();
+        if (_indexOf(id, msg.sender) < t.playerCount) revert AlreadySeated();
+        if (msg.value != t.wagerWei) revert BadWager();
+        bool nftTable = _tokenIds[id][0] > 0;
+        if (nftTable) {
             if (tokenId == 0) revert BadNft();
-            if (diceNft.ownerOf(tokenId) != msg.sender) revert BadNft();
-            diceNft.transferFrom(msg.sender, address(this), tokenId);
-            d.challengerTokenId = tokenId;
+            _pullNft(msg.sender, tokenId);
         } else if (tokenId != 0) {
             revert BadNft();
         }
-        d.challenger = msg.sender;
-        d.commitBlock = uint64(block.number);
-        d.revealBlock = uint64(block.number + REVEAL_DELAY);
-        d.status = LOCKED;
-        emit DuelLocked(id, msg.sender, d.revealBlock, tokenId);
+        uint8 i = t.playerCount;
+        _seats[id][i] = msg.sender;
+        _tokenIds[id][i] = tokenId;
+        t.playerCount = i + 1;
+        emit PlayerJoined(id, msg.sender, tokenId, t.playerCount);
+    }
+
+    function leave(uint256 id) external {
+        Table storage t = tables[id];
+        if (t.status != WAITING) revert BadStatus();
+        if (msg.sender == t.host) revert NotHost();
+        uint8 n = t.playerCount;
+        uint8 found = n;
+        for (uint8 i = 0; i < n; i++) {
+            if (_seats[id][i] == msg.sender) {
+                found = i;
+                break;
+            }
+        }
+        if (found == n) revert NotSeated();
+        uint256 token = _tokenIds[id][found];
+        uint8 last = n - 1;
+        if (found != last) {
+            _seats[id][found] = _seats[id][last];
+            _tokenIds[id][found] = _tokenIds[id][last];
+        }
+        _seats[id][last] = address(0);
+        _tokenIds[id][last] = 0;
+        t.playerCount = last;
+        _pay(msg.sender, t.wagerWei);
+        _pushNft(msg.sender, token);
+        emit PlayerLeft(id, msg.sender, t.playerCount);
+    }
+
+    function start(uint256 id) external {
+        Table storage t = tables[id];
+        if (t.status != WAITING) revert BadStatus();
+        if (msg.sender != t.host) revert NotHost();
+        if (t.playerCount < MIN_PLAYERS) revert NeedPlayers();
+        t.status = LOCKED;
+        t.phase = PHASE_ROUND1;
+        t.commitBlock = uint64(block.number);
+        t.revealBlock = uint64(block.number + REVEAL_DELAY);
+        emit MatchStarted(id, t.playerCount, t.revealBlock);
     }
 
     function settle(uint256 id) external {
-        Duel storage d = duels[id];
-        if (d.status != LOCKED) revert BadStatus();
-        if (block.number <= d.revealBlock) revert TooEarly();
-        if (block.number > uint256(d.revealBlock) + HASH_WINDOW) revert Expired();
-        bytes32 h = blockhash(d.revealBlock);
+        Table storage t = tables[id];
+        if (t.status != LOCKED) revert BadStatus();
+        if (block.number <= t.revealBlock) revert TooEarly();
+        if (block.number > uint256(t.revealBlock) + HASH_WINDOW) revert Expired();
+        bytes32 h = blockhash(t.revealBlock);
         if (h == bytes32(0)) revert HashMissing();
-        (uint8 hr, uint8 cr) = deriveRolls(h, id, d.host, d.challenger, d.wagerWei, d.revealBlock);
-        d.hostRoll = hr;
-        d.challengerRoll = cr;
-        d.entropy = h;
-        address winner = hr > cr ? d.host : d.challenger;
-        d.winner = winner;
-        d.status = SETTLED;
-        _pay(winner, d.wagerWei * 2);
-        if (d.hostTokenId > 0) diceNft.transferFrom(address(this), winner, d.hostTokenId);
-        if (d.challengerTokenId > 0) diceNft.transferFrom(address(this), winner, d.challengerTokenId);
-        emit DuelSettled(id, winner, hr, cr, h);
+
+        if (t.phase == PHASE_ROUND1) {
+            uint64 reveal = t.revealBlock;
+            _scoreRound(id, h, reveal, false);
+            t.entropy = h;
+            if (t.playerCount <= FINALISTS) {
+                _payout(id, h);
+                return;
+            }
+            _markFinalists(id, h, reveal);
+            t.phase = PHASE_FINAL;
+            t.commitBlock = uint64(block.number);
+            t.revealBlock = uint64(block.number + REVEAL_DELAY);
+            emit RoundSettled(id, PHASE_ROUND1, h);
+            return;
+        }
+
+        if (t.phase != PHASE_FINAL) revert BadStatus();
+        _scoreRound(id, h, t.revealBlock, true);
+        t.entropy = h;
+        _payout(id, h);
     }
 
     function cancel(uint256 id) external {
-        Duel storage d = duels[id];
-        if (d.status != WAITING) revert BadStatus();
-        if (msg.sender != d.host) revert NotHost();
-        d.status = CANCELLED;
-        _pay(d.host, d.wagerWei);
-        if (d.hostTokenId > 0) diceNft.transferFrom(address(this), d.host, d.hostTokenId);
+        Table storage t = tables[id];
+        if (t.status != WAITING) revert BadStatus();
+        if (msg.sender != t.host) revert NotHost();
+        t.status = CANCELLED;
+        _refundAll(id);
         emit DuelCancelled(id);
     }
 
     function refundExpired(uint256 id) external {
-        Duel storage d = duels[id];
-        if (d.status != LOCKED) revert BadStatus();
-        if (block.number <= uint256(d.revealBlock) + HASH_WINDOW) revert TooEarly();
-        d.status = REFUNDED;
-        _pay(d.host, d.wagerWei);
-        _pay(d.challenger, d.wagerWei);
-        if (d.hostTokenId > 0) diceNft.transferFrom(address(this), d.host, d.hostTokenId);
-        if (d.challengerTokenId > 0) {
-            diceNft.transferFrom(address(this), d.challenger, d.challengerTokenId);
-        }
+        Table storage t = tables[id];
+        if (t.status != LOCKED) revert BadStatus();
+        if (block.number <= uint256(t.revealBlock) + HASH_WINDOW) revert TooEarly();
+        t.status = REFUNDED;
+        _refundAll(id);
         emit DuelRefunded(id);
     }
 
-    function deriveRolls(
+    function getPlayers(uint256 id)
+        external
+        view
+        returns (
+            address[] memory wallets,
+            uint256[] memory tokens,
+            uint8[] memory round1Rolls,
+            uint8[] memory finalRolls,
+            bool[] memory advanced
+        )
+    {
+        uint8 n = tables[id].playerCount;
+        wallets = new address[](n);
+        tokens = new uint256[](n);
+        round1Rolls = new uint8[](n);
+        finalRolls = new uint8[](n);
+        advanced = new bool[](n);
+        for (uint8 i = 0; i < n; i++) {
+            wallets[i] = _seats[id][i];
+            tokens[i] = _tokenIds[id][i];
+            round1Rolls[i] = _round1[id][i];
+            finalRolls[i] = _finals[id][i];
+            advanced[i] = _advanced[id][i];
+        }
+    }
+
+    /// @notice Unbiased d6 plus a hash tie-break so rankings are total-ordered.
+    function deriveScore(
         bytes32 entropy,
-        uint256 duelId,
-        address host,
-        address challenger,
+        uint256 tableId,
+        address player,
         uint256 wagerWei,
-        uint64 revealBlock
-    ) public pure returns (uint8 hostRoll, uint8 challengerRoll) {
+        uint64 revealBlock,
+        uint8 phase,
+        uint256 index
+    ) public pure returns (uint8 roll, uint256 score) {
         for (uint256 c = 0; c < 64; c++) {
             bytes32 digest = keccak256(
-                abi.encodePacked(entropy, duelId, host, challenger, wagerWei, revealBlock, c)
+                abi.encodePacked(entropy, tableId, player, wagerWei, revealBlock, phase, index, c)
             );
             uint8 a = uint8(digest[0]);
-            uint8 b = uint8(digest[1]);
-            if (a < 252 && b < 252) {
-                hostRoll = (a % 6) + 1;
-                challengerRoll = (b % 6) + 1;
-                if (hostRoll != challengerRoll) return (hostRoll, challengerRoll);
+            if (a < 252) {
+                roll = (a % 6) + 1;
+                score = (uint256(roll) << 248) | uint256(uint248(uint256(digest)));
+                return (roll, score);
             }
         }
         revert HashMissing();
     }
 
+    function _scoreRound(uint256 id, bytes32 entropy, uint64 reveal, bool finalsOnly) internal {
+        Table storage t = tables[id];
+        uint8 n = t.playerCount;
+        uint8 phase = finalsOnly ? PHASE_FINAL : PHASE_ROUND1;
+        for (uint8 i = 0; i < n; i++) {
+            if (finalsOnly && !_advanced[id][i]) continue;
+            (uint8 roll,) = deriveScore(entropy, id, _seats[id][i], t.wagerWei, reveal, phase, i);
+            if (finalsOnly) _finals[id][i] = roll;
+            else _round1[id][i] = roll;
+        }
+    }
+
+    function _markFinalists(uint256 id, bytes32 entropy, uint64 reveal) internal {
+        Table storage t = tables[id];
+        uint8 n = t.playerCount;
+        uint256[] memory scores = new uint256[](n);
+        uint8[] memory idx = new uint8[](n);
+        for (uint8 i = 0; i < n; i++) {
+            (, scores[i]) = deriveScore(entropy, id, _seats[id][i], t.wagerWei, reveal, PHASE_ROUND1, i);
+            idx[i] = i;
+        }
+        for (uint8 a = 0; a < n; a++) {
+            for (uint8 b = uint8(a + 1); b < n; b++) {
+                if (scores[idx[b]] > scores[idx[a]]) {
+                    (idx[a], idx[b]) = (idx[b], idx[a]);
+                }
+            }
+        }
+        uint8 take = FINALISTS < n ? FINALISTS : n;
+        for (uint8 k = 0; k < take; k++) {
+            _advanced[id][idx[k]] = true;
+        }
+    }
+
+    function _payout(uint256 id, bytes32 entropy) internal {
+        Table storage t = tables[id];
+        uint8 n = t.playerCount;
+        bool finals = t.phase == PHASE_FINAL;
+        uint8 phase = finals ? PHASE_FINAL : PHASE_ROUND1;
+        uint64 reveal = t.revealBlock;
+        uint256 best;
+        uint8 bestI;
+        uint8 bestRoll;
+        bool found;
+        for (uint8 i = 0; i < n; i++) {
+            if (finals && !_advanced[id][i]) continue;
+            (uint8 roll, uint256 score) = deriveScore(entropy, id, _seats[id][i], t.wagerWei, reveal, phase, i);
+            if (!found || score > best) {
+                found = true;
+                best = score;
+                bestI = i;
+                bestRoll = roll;
+            }
+        }
+        address winner = _seats[id][bestI];
+        t.winner = winner;
+        t.winnerRoll = bestRoll;
+        t.status = SETTLED;
+        _pay(winner, t.wagerWei * uint256(n));
+        for (uint8 i = 0; i < n; i++) {
+            _pushNft(winner, _tokenIds[id][i]);
+        }
+        emit TableSettled(id, winner, bestRoll, entropy);
+    }
+
+    function _refundAll(uint256 id) internal {
+        Table storage t = tables[id];
+        uint8 n = t.playerCount;
+        for (uint8 i = 0; i < n; i++) {
+            address p = _seats[id][i];
+            _pay(p, t.wagerWei);
+            _pushNft(p, _tokenIds[id][i]);
+        }
+    }
+
+    function _indexOf(uint256 id, address player) internal view returns (uint8) {
+        uint8 n = tables[id].playerCount;
+        for (uint8 i = 0; i < n; i++) {
+            if (_seats[id][i] == player) return i;
+        }
+        return n;
+    }
+
+    function _pullNft(address from, uint256 tokenId) internal {
+        if (tokenId == 0) return;
+        if (diceNft.ownerOf(tokenId) != from) revert BadNft();
+        diceNft.transferFrom(from, address(this), tokenId);
+    }
+
+    function _pushNft(address to, uint256 tokenId) internal {
+        if (tokenId == 0 || to == address(0)) return;
+        diceNft.transferFrom(address(this), to, tokenId);
+    }
+
     function _pay(address to, uint256 amount) internal {
         if (amount == 0 || to == address(0)) return;
-        (bool ok, ) = to.call{value: amount}("");
+        (bool ok,) = to.call{value: amount}("");
         if (!ok) revert TransferFailed();
     }
 }

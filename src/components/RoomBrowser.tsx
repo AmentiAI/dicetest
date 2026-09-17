@@ -8,6 +8,7 @@ import { getJson } from "@/lib/http";
 import { CreateDuel } from "./CreateDuel";
 import { useProfile } from "./ProfileProvider";
 import { ARENAS, type Arena } from "@/lib/cosmetics";
+import { tableModeLabel } from "@/lib/eth/table";
 import { DiceNftBadge } from "./NftPicker";
 
 type RoomRow = {
@@ -16,6 +17,8 @@ type RoomRow = {
   wagerLamports: string;
   status: string;
   hostNftId: string | null;
+  maxPlayers?: number | null;
+  playerCount?: number | null;
   arena: Arena | null;
   host: { username: string; nftTokenId: string | null } | null;
 };
@@ -78,9 +81,12 @@ export function RoomBrowser() {
 
       <header className="dash-page-head">
         <div>
-          <p className="dash-eyebrow">1v1 lobby</p>
+          <p className="dash-eyebrow">Tables</p>
           <h1>Play game</h1>
-          <p className="muted">Host or join a 1v1. Bet ETH, a dice NFT, or both.</p>
+          <p className="muted">
+            Host a 1v1 or a free-for-all up to 10. Start whenever you confirm —
+            top 5 advance when the table is big enough. Winner takes the pot.
+          </p>
         </div>
         {profile ? <CreateDuel initialWager={initialWager} /> : <p className="muted">Connect wallet to host.</p>}
       </header>
@@ -149,6 +155,9 @@ export function RoomBrowser() {
                     <span className={`badge ${r.status}`}>{r.status}</span>
                   </div>
                   <p className="muted">{shortKey(r.hostWallet)}</p>
+                  <p className="muted">
+                    {r.playerCount ?? 1}/{r.maxPlayers ?? 2} · {tableModeLabel(r.maxPlayers ?? 2)}
+                  </p>
                   <DiceNftBadge tokenId={r.host?.nftTokenId} />
                   {r.hostNftId && r.hostNftId !== r.host?.nftTokenId ? (
                     <DiceNftBadge tokenId={r.hostNftId} staked />

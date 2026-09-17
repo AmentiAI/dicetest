@@ -1,19 +1,23 @@
 export default function HowToPlayPage() {
   return (
     <div className="doc-page">
-      <p className="kicker">Coming soon</p>
+      <p className="kicker">Tables</p>
       <h1>How to play</h1>
       <p className="muted">
-        Matches are locked while the Slow Roll whitelist fills. 1,800 slots.
-        Connect an ETH or Robinhood wallet, sign your X handle, and wait for
-        the dice to drop.
+        Host a 1v1 or a free-for-all up to 10. Stake ETH, a Slow Roll NFT, or
+        both. The host starts whenever they confirm. Winner takes the pot. No
+        house cut.
       </p>
       <ol>
-        <li>Connect a wallet on the homepage.</li>
-        <li>Enter your X handle and sign the waitlist message.</li>
+        <li>Connect an ETH or Robinhood wallet and pick a username.</li>
+        <li>Open a table (2–10 seats) or join one by matching the stake.</li>
         <li>
-          When play opens, 1v1 ETH dice: equip a Slow Roll NFT as your character,
-          bet ETH or the NFT, higher roll takes the pot.
+          Host starts with any number of seated players (at least two). Wait
+          three blocks. Highest roll wins.
+        </li>
+        <li>
+          Six or more players: the five highest rolls advance, then they roll
+          again for the whole pot.
         </li>
       </ol>
     </div>

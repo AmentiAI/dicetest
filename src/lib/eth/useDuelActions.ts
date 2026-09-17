@@ -46,21 +46,25 @@ export function useDuelActions() {
     address: address?.toLowerCase() ?? null,
     configured: isContractsConfigured(),
     explain: explainChainError,
-    async createDuel(args: { wagerWei: bigint; tokenId: bigint }) {
-      if (!isContractsConfigured()) throw new Error("ETH contracts are not deployed. Set NEXT_PUBLIC_DUEL_ADDRESS and NEXT_PUBLIC_NFT_ADDRESS.");
+    async createDuel(args: { wagerWei: bigint; tokenId: bigint; maxPlayers: number }) {
+      if (!isContractsConfigured()) {
+        throw new Error(
+          "ETH contracts are not deployed. Set NEXT_PUBLIC_DUEL_ADDRESS and NEXT_PUBLIC_NFT_ADDRESS.",
+        );
+      }
       await approveIfNeeded(args.tokenId);
       const hash = await writeContractAsync({
         address: DUEL_ADDRESS,
         abi: duelAbi,
         functionName: "createDuel",
-        args: [args.tokenId],
+        args: [args.tokenId, args.maxPlayers],
         value: args.wagerWei,
       });
       const receipt = await wait(hash);
       const logs = parseEventLogs({
         abi: duelAbi,
         logs: receipt.logs,
-        eventName: "DuelCreated",
+        eventName: "TableCreated",
       });
       const id = logs[0]?.args.id;
       if (id == null) throw new Error("Create event missing from receipt");
@@ -74,6 +78,26 @@ export function useDuelActions() {
         functionName: "joinDuel",
         args: [args.duelId, args.tokenId],
         value: args.wagerWei,
+      });
+      await wait(hash);
+      return hash;
+    },
+    async leave(duelId: bigint) {
+      const hash = await writeContractAsync({
+        address: DUEL_ADDRESS,
+        abi: duelAbi,
+        functionName: "leave",
+        args: [duelId],
+      });
+      await wait(hash);
+      return hash;
+    },
+    async start(duelId: bigint) {
+      const hash = await writeContractAsync({
+        address: DUEL_ADDRESS,
+        abi: duelAbi,
+        functionName: "start",
+        args: [duelId],
       });
       await wait(hash);
       return hash;

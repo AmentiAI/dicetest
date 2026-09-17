@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { fail, failInternal } from "@/lib/api";
 import { publicClient } from "@/lib/eth/client";
-import { deriveRolls, hashToHex } from "@/lib/eth/dice";
+import { deriveScore, hashToHex } from "@/lib/eth/dice";
 import { currentBlock, fetchDuel, fetchRevealHash } from "@/lib/eth/fetch";
 import { isU256String } from "@/lib/eth/keys";
+import { TABLE_PHASE } from "@/lib/eth/table";
 import { limitOr429 } from "@/lib/rate-limit";
 import { zeroAddress } from "viem";
 
@@ -30,11 +31,10 @@ export async function GET(req: Request) {
     }
 
     const revealSlot = onchain.revealBlock;
+    const phase = onchain.phase;
     let preview: {
-      hostRoll: number;
-      challengerRoll: number;
+      seats: { wallet: string; roll: number; score: string; advanced: boolean }[];
       slotHash: string;
-      counter: number;
     } | null = null;
     let expired = false;
     let hashReady = false;
@@ -45,19 +45,28 @@ export async function GET(req: Request) {
       if (found.entry) {
         hashReady = true;
         try {
-          const rolls = deriveRolls({
-            entropy: found.entry.hash,
-            duelId: pda,
-            host: onchain.host,
-            challenger: onchain.challenger,
-            wagerWei: onchain.wagerWei,
-            revealBlock: found.entry.slot,
-          });
+          const seats = onchain.seats
+            .filter((s) => phase < TABLE_PHASE.Final || s.advanced)
+            .map((s) => {
+              const derived = deriveScore({
+                entropy: found.entry!.hash,
+                tableId: pda,
+                player: s.wallet as `0x${string}`,
+                wagerWei: onchain.wagerWei,
+                revealBlock: found.entry!.slot,
+                phase: phase || TABLE_PHASE.Round1,
+                index: s.index,
+              });
+              return {
+                wallet: s.wallet,
+                roll: derived.roll,
+                score: derived.score.toString(),
+                advanced: s.advanced,
+              };
+            });
           preview = {
-            hostRoll: rolls.hostRoll,
-            challengerRoll: rolls.challengerRoll,
+            seats,
             slotHash: hashToHex(found.entry.hash),
-            counter: rolls.counter,
           };
         } catch {
           preview = null;
@@ -65,20 +74,29 @@ export async function GET(req: Request) {
       }
     }
 
+    const hostPreview = preview?.seats.find(
+      (s) => s.wallet === onchain.host.toLowerCase(),
+    );
+    const guestPreview = preview?.seats.find(
+      (s) => s.wallet === onchain.challenger.toLowerCase(),
+    );
+
     return NextResponse.json({
       slot,
       revealSlot: revealSlot.toString(),
       commitSlot: onchain.commitBlock.toString(),
       status: onchain.status,
+      phase,
+      maxPlayers: onchain.maxPlayers,
+      playerCount: onchain.playerCount,
       hashReady,
       expired,
       preview,
-      hostRoll: onchain.hostRoll || null,
-      challengerRoll: onchain.challengerRoll || null,
+      hostRoll: onchain.hostRoll || hostPreview?.roll || null,
+      challengerRoll: onchain.challengerRoll || guestPreview?.roll || null,
       winner:
-        onchain.winner.toLowerCase() === zeroAddress
-          ? null
-          : onchain.winner.toLowerCase(),
+        onchain.winner.toLowerCase() === zeroAddress ? null : onchain.winner.toLowerCase(),
+      seats: onchain.seats,
     });
   } catch (e) {
     return failInternal("slot", e);

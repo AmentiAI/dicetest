@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ethToWei } from "@/lib/format";
 import { postJson } from "@/lib/http";
-import { MIN_WAGER_ETH, MAX_WAGER_ETH } from "@/lib/eth/constants";
+import { MIN_WAGER_ETH, MAX_WAGER_ETH, MAX_PLAYERS } from "@/lib/eth/constants";
+import { tableModeLabel } from "@/lib/eth/table";
 import { useDuelActions } from "@/lib/eth/useDuelActions";
 import { useEthWallet } from "@/lib/eth/wallet";
 import { useProfile } from "./ProfileProvider";
@@ -22,6 +23,7 @@ export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
   const [wager, setWager] = useState(initialWager ?? "0.05");
   const [arena, setArena] = useState<ArenaId>("alley");
   const [nftId, setNftId] = useState("0");
+  const [maxPlayers, setMaxPlayers] = useState(2);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +62,7 @@ export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
       const { hash, id } = await duel.createDuel({
         wagerWei: bettingNft && n === 0 ? 0n : wei,
         tokenId,
+        maxPlayers,
       });
       const json = await postJson<{ room?: { id: string } }>("/api/rooms", {
         pda: id,
@@ -86,13 +89,30 @@ export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
       {open ? (
         <div className="overlay" onClick={() => !busy && setOpen(false)}>
           <div className="panel create-panel" onClick={(e) => e.stopPropagation()}>
-            <p className="kicker">New 1v1</p>
+            <p className="kicker">New table</p>
             <h2>Lock a wager</h2>
             <p className="muted">
-              Stake ETH, your Block Dice NFT, or both. A challenger matches it.
-              After three blocks, the reveal blockhash rolls both dice. Winner
-              takes the pot. No house cut.
+              Open a 1v1 or a free-for-all (up to {MAX_PLAYERS}). Players match
+              the stake. You start whenever you want — even before the table is
+              full. Six or more: top 5 advance, then one roll for the whole pot.
+              No house cut.
             </p>
+            <div className="field">
+              <span>Table size</span>
+              <div className="chip-row">
+                {Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`chip${maxPlayers === n ? " is-on" : ""}`}
+                    onClick={() => setMaxPlayers(n)}
+                  >
+                    {n === 2 ? "1v1" : n === 10 ? "FFA 10" : `${n}p`}
+                  </button>
+                ))}
+              </div>
+              <p className="muted">{tableModeLabel(maxPlayers)}. Host confirms start.</p>
+            </div>
             <label className="field">
               <span>Wager (ETH)</span>
               <input

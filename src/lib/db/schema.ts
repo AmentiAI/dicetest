@@ -6,6 +6,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import type { TableSeat } from "../eth/table";
 
 export const profiles = pgTable("profiles", {
   wallet: text("wallet").primaryKey(),
@@ -37,6 +38,10 @@ export const rooms = pgTable("rooms", {
   createSignature: text("create_signature").notNull(),
   joinSignature: text("join_signature"),
   settleSignature: text("settle_signature"),
+  maxPlayers: integer("max_players").notNull().default(2),
+  playerCount: integer("player_count").notNull().default(1),
+  phase: integer("phase").notNull().default(0),
+  seats: jsonb("seats").$type<TableSeat[]>().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
