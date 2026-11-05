@@ -1,6 +1,5 @@
 export const PLAY_LOCKED = false;
 export const WAITLIST_CAP = 1800;
-export const NFT_PAGE_SIZE = 12;
 
 export function waitlistMessage(wallet: string, xHandle: string) {
   return `BLOCK DICE waitlist\nwallet:${wallet}\nx:@${xHandle}`;

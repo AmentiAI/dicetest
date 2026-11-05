@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { CoolBtn } from "@/components/CoolBtn";
-import { NftMysterySlider } from "@/components/NftMysterySlider";
 import { WalletButton } from "@/components/WalletButton";
 import { getJson, postJson } from "@/lib/http";
 import { useEthWallet } from "@/lib/eth/wallet";
@@ -84,35 +83,27 @@ export function WaitlistHome() {
     <div className="dash-home waitlist-home">
       <section className="glass-panel dash-hero waitlist-hero">
         <div className="waitlist-copy">
-          <p className="dash-eyebrow">Slow Roll whitelist</p>
+          <p className="dash-eyebrow">Early access</p>
           <h1 className="dash-hero-title">
             ROLL THE <span className="dash-gradient-text">BLOCK</span>
           </h1>
           <p className="dash-hero-sub">
-            Join the Slow Roll whitelist to mint your die. {WAITLIST_CAP.toLocaleString()}{" "}
-            slots. Connect an ETH or Robinhood wallet, drop your X handle, and
-            claim a number.
+            {WAITLIST_CAP.toLocaleString()} slots. Connect a wallet, drop your
+            X handle, and claim a number.
           </p>
           <ul className="waitlist-play">
             <li>
-              <strong>Whitelist first, then mint.</strong>
-              A slot is your pass to mint a Slow Roll dice NFT when the drop
-              opens.
+              <strong>$RTB tables only.</strong>
+              1v1 through free-for-all. Match the $RTB stake, host starts,
+              highest roll takes the pot.
             </li>
             <li>
-              <strong>$1 each. 5% creator fee.</strong>
-              One dollar per die. Secondary sales keep a 5% creator fee. All of
-              that revenue goes back into the platform.
-            </li>
-            <li>
-              <strong>Your NFT is your game dice.</strong>
-              Equip it in a 1v1 or a free-for-all. It rolls on the table and
-              shows on the leaderboard. Wager ETH or the die itself.
+              <strong>Provably fair.</strong>
+              A future Ethereum block is every die. Anyone can check it later.
             </li>
             <li>
               <strong>No house fee on games.</strong>
-              1v1 through free-for-all pots pay out in full. We don&apos;t take a
-              cut of the match.
+              Pots pay out in full. We don&apos;t take a cut of the match.
             </li>
           </ul>
           <div className="waitlist-meter">
@@ -161,7 +152,6 @@ export function WaitlistHome() {
             </div>
           )}
         </div>
-        <NftMysterySlider />
       </section>
     </div>
   );

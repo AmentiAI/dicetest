@@ -12,6 +12,7 @@ import { MiniDie } from "@/components/dashboard/MiniDie";
 import { formatEth, formatUsd, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
 import { MAX_WAGER_ETH, MIN_WAGER_ETH } from "@/lib/eth/constants";
+import { TOKEN } from "@/lib/token";
 import type { GlassDieTone } from "@/lib/cosmetics";
 
 type Stats = {
@@ -39,11 +40,11 @@ type RoomRow = {
 const HERO_DICE: GlassDieTone[] = ["glass-purple", "glass-green", "glass-orange"];
 
 const PREVIEW_ROLLS = [
-  { name: "Nova", bet: "1.20 ETH", usd: "$214.80", a: 6, b: 5, profit: "+1.20 ETH", win: true },
-  { name: "Kite", bet: "0.50 ETH", usd: "$89.50", a: 2, b: 4, profit: "-0.50 ETH", win: false },
-  { name: "Riven", bet: "2.00 ETH", usd: "$358.00", a: 5, b: 3, profit: "+2.00 ETH", win: true },
-  { name: "Ash", bet: "0.25 ETH", usd: "$44.75", a: 1, b: 6, profit: "-0.25 ETH", win: false },
-  { name: "Lux", bet: "0.80 ETH", usd: "$143.20", a: 5, b: 2, profit: "+0.80 ETH", win: true },
+  { name: "Nova", bet: `1.20 ${TOKEN.symbol}`, usd: "$214.80", a: 6, b: 5, profit: `+1.20 ${TOKEN.symbol}`, win: true },
+  { name: "Kite", bet: `0.50 ${TOKEN.symbol}`, usd: "$89.50", a: 2, b: 4, profit: `-0.50 ${TOKEN.symbol}`, win: false },
+  { name: "Riven", bet: `2.00 ${TOKEN.symbol}`, usd: "$358.00", a: 5, b: 3, profit: `+2.00 ${TOKEN.symbol}`, win: true },
+  { name: "Ash", bet: `0.25 ${TOKEN.symbol}`, usd: "$44.75", a: 1, b: 6, profit: `-0.25 ${TOKEN.symbol}`, win: false },
+  { name: "Lux", bet: `0.80 ${TOKEN.symbol}`, usd: "$143.20", a: 5, b: 2, profit: `+0.80 ${TOKEN.symbol}`, win: true },
 ];
 
 function clampWager(n: number, max: number) {
@@ -138,9 +139,7 @@ export function LandingPage() {
               ROLL THE <span className="dash-gradient-text">BLOCK</span>
             </h1>
             <p className="dash-hero-sub">
-              Connect MetaMask, Rainbow, Coinbase, or Robinhood. Equip a Block
-              Dice NFT as your character. Bet ETH, the NFT, or both — higher
-              roll takes the pot.
+              {`Buy $${TOKEN.symbol} on pump.fun, connect your wallet, and roll. Higher roll takes the pot.`}
             </p>
 
             <div className="dash-bet-block">
@@ -202,9 +201,14 @@ export function LandingPage() {
               <GameIcon name="dice" size={22} />
               <span className="btn-roll-text">
                 <strong>ROLL DICE</strong>
-                <small>Enter lobby to match &amp; roll on Ethereum</small>
+                <small>{`Enter lobby to match & roll $${TOKEN.symbol}`}</small>
               </span>
             </CoolBtn>
+            <p className="dash-hero-sub" style={{ marginTop: 12 }}>
+              <a href={TOKEN.pumpUrl} target="_blank" rel="noreferrer">
+                {`Buy $${TOKEN.symbol} on pump.fun`}
+              </a>
+            </p>
           </div>
         </div>
       </section>
@@ -250,9 +254,9 @@ export function LandingPage() {
               ) : typeof s.value === "number" ? (
                 <AnimatedNumber value={s.value} format={(n) => String(Math.round(n))} />
               ) : Number(s.value) === 0 ? (
-                "0.00 ETH"
+                `0.00 ${TOKEN.symbol}`
               ) : (
-                `${(Number(s.value) / 1e18).toFixed(2)} ETH`
+                `${(Number(s.value) / 1e18).toFixed(2)} ${TOKEN.symbol}`
               )}
             </p>
             <p className="dash-stat-sub">{s.sub ?? "\u00a0"}</p>

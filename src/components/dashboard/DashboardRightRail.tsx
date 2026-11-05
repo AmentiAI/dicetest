@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { formatEth, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
 import { WalletBadge } from "@/components/WalletBadge";
-import { DiceNftBadge } from "@/components/NftPicker";
 
 type Leader = {
   wallet: string;
@@ -13,7 +12,6 @@ type Leader = {
   wins: number;
   losses: number;
   volumeLamports: string;
-  nftTokenId?: string | null;
 };
 
 type RoomRow = {
@@ -159,7 +157,6 @@ export function DashboardRightRail() {
               <span className="podium-medal">🥈</span>
               <WalletBadge label={top3[1].username} accent="#94a3b8" />
               <strong>{top3[1].username}</strong>
-              <DiceNftBadge tokenId={top3[1].nftTokenId} />
               <small>{formatEth(top3[1].volumeLamports)}</small>
             </div>
           ) : (
@@ -170,7 +167,6 @@ export function DashboardRightRail() {
               <span className="podium-medal">🥇</span>
               <WalletBadge label={top3[0].username} accent="#fbbf24" />
               <strong>{top3[0].username}</strong>
-              <DiceNftBadge tokenId={top3[0].nftTokenId} />
               <small>{formatEth(top3[0].volumeLamports)}</small>
             </div>
           ) : (
@@ -181,7 +177,6 @@ export function DashboardRightRail() {
               <span className="podium-medal">🥉</span>
               <WalletBadge label={top3[2].username} accent="#d97706" />
               <strong>{top3[2].username}</strong>
-              <DiceNftBadge tokenId={top3[2].nftTokenId} />
               <small>{formatEth(top3[2].volumeLamports)}</small>
             </div>
           ) : (
@@ -194,7 +189,6 @@ export function DashboardRightRail() {
               <span className="rank-num">{i + 4}</span>
               <WalletBadge label={p.username} />
               <strong>{p.username}</strong>
-              <DiceNftBadge tokenId={p.nftTokenId} />
               <em>{formatEth(p.volumeLamports)}</em>
             </li>
           ))}

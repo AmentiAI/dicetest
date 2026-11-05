@@ -1,3 +1,5 @@
+import { TOKEN, TOKEN_UNITS } from "@/lib/token";
+
 const WEI = 10n ** 18n;
 
 export function weiToEth(wei: bigint | number | string) {
@@ -13,7 +15,7 @@ export function formatEth(wei: bigint | number | string, digits = 4) {
   return `${n.toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: digits,
-  })} ETH`;
+  })} ${TOKEN.symbol}`;
 }
 
 /** @deprecated use formatEth — kept so remaining UI compiles during the swap */
@@ -21,9 +23,9 @@ export const formatSol = formatEth;
 export const lamportsToSol = weiToEth;
 export const solToLamports = ethToWei;
 
-export function formatUsd(eth: number, price: number | null) {
+export function formatUsd(amount: number, price: number | null) {
   if (price == null || !Number.isFinite(price)) return "—";
-  const usd = eth * price;
+  const usd = amount * price;
   return usd.toLocaleString(undefined, {
     style: "currency",
     currency: "USD",
@@ -42,4 +44,8 @@ export function ethInputFromWei(wei: string) {
   if (!Number.isFinite(n)) return "0.05";
   const text = n.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
   return text || "0";
+}
+
+export function tokenUnits(amount: number) {
+  return BigInt(Math.round(amount * Number(TOKEN_UNITS)));
 }

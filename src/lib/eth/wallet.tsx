@@ -37,10 +37,10 @@ export function EthWalletProvider({ children }: { children: ReactNode }) {
         <div className="overlay" onClick={() => setOpen(false)}>
           <div className="panel identity-panel" onClick={(e) => e.stopPropagation()}>
             <p className="kicker">Wallet</p>
-            <h2>Connect ETH</h2>
+            <h2>Connect wallet</h2>
             <p className="muted">
-              Browser wallets (MetaMask, Rainbow, Coinbase, Rabby) or WalletConnect
-              for Robinhood and mobile.
+              Phantom, Backpack, Solflare, or any WalletConnect wallet. Tables
+              are $RTB — buy it on pump.fun if you need a bag.
             </p>
             <div className="row-actions">
               <CoolBtn
@@ -58,7 +58,7 @@ export function EthWalletProvider({ children }: { children: ReactNode }) {
                 disabled={isPending || !walletConnect}
                 onClick={() => walletConnect && connect({ connector: walletConnect })}
               >
-                WalletConnect / Robinhood
+                WalletConnect
               </CoolBtn>
             </div>
             {error ? <p className="err">{error.message}</p> : null}

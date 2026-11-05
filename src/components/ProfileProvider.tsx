@@ -25,7 +25,7 @@ export type Profile = {
 const Ctx = createContext<{
   profile: Profile | null;
   loading: boolean;
-  save: (username: string, nftTokenId?: string) => Promise<void>;
+  save: (username: string) => Promise<void>;
   refresh: () => Promise<void>;
 } | null>(null);
 
@@ -55,12 +55,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const save = useCallback(
-    async (username: string, nftTokenId?: string) => {
+    async (username: string) => {
       if (!address) {
         throw new Error("Connect a wallet that can sign messages");
       }
-      const nft = nftTokenId ?? profile?.nftTokenId ?? "0";
-      const message = identityMessage(address, username, nft);
+      const message = identityMessage(address, username, "0");
       const sig = await signMessage(message);
       try {
         const json = await postJson<{ profile: Profile; error?: string }>(
@@ -68,7 +67,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           {
             wallet: address,
             username,
-            nftTokenId: nft,
             signatureBase64: sig,
           },
         );
@@ -85,7 +83,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw e;
       }
     },
-    [address, signMessage, profile?.nftTokenId],
+    [address, signMessage],
   );
 
   return (

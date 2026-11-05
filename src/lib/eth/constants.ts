@@ -1,6 +1,6 @@
 import { type Address, type Hex, isAddress, zeroAddress } from "viem";
 import { base, baseSepolia, mainnet, sepolia } from "viem/chains";
-import { duelAbi, nftAbi } from "./abi";
+import { duelAbi } from "./abi";
 
 const CHAINS = [sepolia, mainnet, base, baseSepolia] as const;
 
@@ -33,8 +33,6 @@ export function explorerBlock(block: number | string) {
 
 export const DUEL_ADDRESS = ((process.env.NEXT_PUBLIC_DUEL_ADDRESS ||
   zeroAddress) as Address);
-export const NFT_ADDRESS = ((process.env.NEXT_PUBLIC_NFT_ADDRESS ||
-  zeroAddress) as Address);
 
 export const MIN_WAGER_ETH = 0.0001;
 export const MAX_WAGER_ETH = 50;
@@ -45,9 +43,9 @@ export { MIN_PLAYERS, MAX_PLAYERS, FINALISTS, TABLE_PHASE } from "./table";
 export const WEI_PER_ETH = 10n ** 18n;
 
 export function isContractsConfigured() {
-  return DUEL_ADDRESS !== zeroAddress && NFT_ADDRESS !== zeroAddress;
+  return DUEL_ADDRESS !== zeroAddress;
 }
 
-export { duelAbi, nftAbi };
+export { duelAbi };
 export type { Address, Hex };
 export { isAddress, zeroAddress };

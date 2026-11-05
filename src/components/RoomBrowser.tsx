@@ -9,18 +9,16 @@ import { CreateDuel } from "./CreateDuel";
 import { useProfile } from "./ProfileProvider";
 import { ARENAS, type Arena } from "@/lib/cosmetics";
 import { tableModeLabel } from "@/lib/eth/table";
-import { DiceNftBadge } from "./NftPicker";
 
 type RoomRow = {
   id: string;
   hostWallet: string;
   wagerLamports: string;
   status: string;
-  hostNftId: string | null;
   maxPlayers?: number | null;
   playerCount?: number | null;
   arena: Arena | null;
-  host: { username: string; nftTokenId: string | null } | null;
+  host: { username: string } | null;
 };
 
 export function RoomBrowser() {
@@ -74,8 +72,8 @@ export function RoomBrowser() {
     <div className="dash-page">
       {stats && stats.programDeployed === false ? (
         <div className="notice notice-warn">
-          Escrow contracts are not deployed — set NEXT_PUBLIC_DUEL_ADDRESS and
-          NEXT_PUBLIC_NFT_ADDRESS after <code>forge script</code>.
+          Escrow contract is not deployed — set NEXT_PUBLIC_DUEL_ADDRESS after{" "}
+          <code>forge script</code>.
         </div>
       ) : null}
 
@@ -158,17 +156,9 @@ export function RoomBrowser() {
                   <p className="muted">
                     {r.playerCount ?? 1}/{r.maxPlayers ?? 2} · {tableModeLabel(r.maxPlayers ?? 2)}
                   </p>
-                  <DiceNftBadge tokenId={r.host?.nftTokenId} />
-                  {r.hostNftId && r.hostNftId !== r.host?.nftTokenId ? (
-                    <DiceNftBadge tokenId={r.hostNftId} staked />
-                  ) : null}
                 </div>
                 <div className="room-wager">
-                  <b className="gold">
-                    {Number(r.wagerLamports) === 0 && r.hostNftId
-                      ? "NFT stake"
-                      : formatEth(r.wagerLamports)}
-                  </b>
+                  <b className="gold">{formatEth(r.wagerLamports)}</b>
                   <span>{formatUsd(eth, price)}</span>
                 </div>
                 <span className="join-cta">

@@ -32,16 +32,13 @@ import { AnimatedNumber } from "./AnimatedNumber";
 import { GameIcon } from "./GameIcon";
 import { WalletButton } from "./WalletButton";
 import { CoolBtn } from "./CoolBtn";
-import { DiceNftBadge, NftPicker } from "./NftPicker";
 import { useProfile } from "./ProfileProvider";
-import { characterTone, isNftId } from "@/lib/eth/nft";
 import { arenaForSeed, type Arena, type ArenaId, type DieTone } from "@/lib/cosmetics";
 import { stagger, motion as motionTokens } from "@/lib/motion";
 
 type ProfileBit = {
   username: string;
   demon: string;
-  nftTokenId: string | null;
   wins: number;
   losses: number;
 };
@@ -114,12 +111,7 @@ export function DuelArena({ pda }: { pda: string }) {
   const [rematchArena, setRematchArena] = useState<ArenaId>("alley");
   const [revealed, setRevealed] = useState(false);
   const [announced, setAnnounced] = useState(false);
-  const [joinNft, setJoinNft] = useState("0");
   const [payoutFailed, setPayoutFailed] = useState(false);
-
-  useEffect(() => {
-    if (profile?.nftTokenId) setJoinNft(profile.nftTokenId);
-  }, [profile?.nftTokenId]);
 
   const load = useCallback(async (withPrice = false) => {
     try {
@@ -324,14 +316,8 @@ export function DuelArena({ pda }: { pda: string }) {
     setBusy(true);
     setError(null);
     try {
-      const tokenId =
-        room.hostNftId && room.hostNftId !== "0" ? BigInt(joinNft || profile?.nftTokenId || "0") : 0n;
-      if (room.hostNftId && room.hostNftId !== "0" && tokenId === 0n) {
-        throw new Error("This table is staking dice NFTs. Equip or pick one first.");
-      }
       const sig = await duel.joinDuel({
         duelId: BigInt(room.duelId),
-        tokenId,
         wagerWei: BigInt(room.wagerLamports),
       });
       await reportSig(sig, { join: true });
@@ -472,7 +458,7 @@ export function DuelArena({ pda }: { pda: string }) {
     }
     const n = Number(rematchWager);
     if (!Number.isFinite(n) || n < MIN_WAGER_ETH || n > MAX_WAGER_ETH) {
-      setError(`Wager must be ${MIN_WAGER_ETH}–${MAX_WAGER_ETH} ETH`);
+      setError(`Wager must be ${MIN_WAGER_ETH}–${MAX_WAGER_ETH} $RTB`);
       return;
     }
     const wei = ethToWei(n);
@@ -481,7 +467,6 @@ export function DuelArena({ pda }: { pda: string }) {
     try {
       const { hash, id } = await duel.createDuel({
         wagerWei: wei,
-        tokenId: 0n,
         maxPlayers,
       });
       const json = await postJson<{ room?: { id: string } }>("/api/rooms", {
@@ -511,7 +496,6 @@ export function DuelArena({ pda }: { pda: string }) {
     try {
       const sig = await duel.joinDuel({
         duelId: BigInt(next.duelId),
-        tokenId: 0n,
         wagerWei: BigInt(next.wagerLamports),
       });
       try {
@@ -547,14 +531,12 @@ export function DuelArena({ pda }: { pda: string }) {
   const lastWagerEth = ethInputFromWei(room.wagerLamports);
   const rematchChips = [...new Set([lastWagerEth, "0.01", "0.05", "0.1", "0.25", "1"])];
   const arena = data?.arena ?? arenaForSeed(room?.id ?? pda);
-  const nftStake = isNftId(room.hostNftId);
-  const ethStake = BigInt(room.wagerLamports) > 0n;
   const duo = maxPlayers === 2;
   const vacant = Math.max(0, maxPlayers - playerCount);
   const guestTones: DieTone[] = [arena.guestSkin, arena.hostSkin, "orange-blue"];
 
-  function toneFor(p: PlayerView, i: number): DieTone {
-    return characterTone(p.profile, i === 0 ? arena.hostSkin : guestTones[i % guestTones.length]!);
+  function toneFor(_p: PlayerView, i: number): DieTone {
+    return i === 0 ? arena.hostSkin : guestTones[i % guestTones.length]!;
   }
 
   function openRematch() {
@@ -598,8 +580,6 @@ export function DuelArena({ pda }: { pda: string }) {
               winner={winner === p.wallet}
               accent={i === 0 ? arena.hostAccent : arena.guestAccent}
               dieTone={toneFor(p, i)}
-              nftTokenId={p.profile?.nftTokenId}
-              stakedNftId={p.tokenId !== "0" ? p.tokenId : null}
               advanced={inFinal || p.advanced}
               eliminated={inFinal && !p.advanced && playerCount > 5}
             />
@@ -631,7 +611,7 @@ export function DuelArena({ pda }: { pda: string }) {
                 <dd className="gold pot-value">
                   <AnimatedNumber
                     value={Number(pot) / 1e18}
-                    format={(n) => `${n.toFixed(4)} ETH`}
+                    format={(n) => `${n.toFixed(4)} RTB`}
                   />
                 </dd>
               </div>
@@ -667,7 +647,7 @@ export function DuelArena({ pda }: { pda: string }) {
             arena={arena}
             hot={locked && !settled}
             won={Boolean(announced && winner && settled)}
-            potLabel={`${(Number(pot) / 1e18).toFixed(4)} ETH`}
+            potLabel={`${(Number(pot) / 1e18).toFixed(4)} RTB`}
           >
             {announced && winner && (settled || !inFinal) ? (
               <motion.div
@@ -782,9 +762,7 @@ export function DuelArena({ pda }: { pda: string }) {
                         <span className="die-label">
                           {isHost
                             ? "Open seat"
-                            : nftStake && !ethStake
-                              ? "Join · match NFT"
-                              : `Join · match ${formatEth(room.wagerLamports)}`}
+                            : `Join · match ${formatEth(room.wagerLamports)}`}
                         </span>
                       </button>
                     </div>
@@ -890,30 +868,18 @@ export function DuelArena({ pda }: { pda: string }) {
             <div className="table-actions arena-v2-actions">
               {waiting && !seated ? (
                 address && profile ? (
-                  <>
-                    {nftStake ? (
-                      <NftPicker
-                        value={joinNft}
-                        onChange={setJoinNft}
-                        allowNone={false}
-                        label="Stake your matching dice NFT"
-                      />
-                    ) : null}
-                    <CoolBtn
-                      variant="join"
-                      pulse={!busy}
-                      disabled={busy || tableFull}
-                      onClick={() => void join()}
-                    >
-                      {busy
-                        ? "Matching on-chain…"
-                        : tableFull
-                          ? "Table full"
-                          : nftStake && !ethStake
-                            ? "Join · stake a matching dice NFT"
-                            : `Join · ${formatEth(room.wagerLamports)}`}
-                    </CoolBtn>
-                  </>
+                  <CoolBtn
+                    variant="join"
+                    pulse={!busy}
+                    disabled={busy || tableFull}
+                    onClick={() => void join()}
+                  >
+                    {busy
+                      ? "Matching on-chain…"
+                      : tableFull
+                        ? "Table full"
+                        : `Join · ${formatEth(room.wagerLamports)}`}
+                  </CoolBtn>
                 ) : address ? (
                   <p className="muted">Pick a username to lock your wager.</p>
                 ) : (
@@ -1052,7 +1018,7 @@ export function DuelArena({ pda }: { pda: string }) {
             Same table size ({maxPlayers}). Last round was {formatEth(room.wagerLamports)}.
           </p>
           <label className="field">
-            <span>Wager (ETH)</span>
+            <span>Wager ($RTB)</span>
             <input
               type="number"
               min={MIN_WAGER_ETH}
@@ -1071,7 +1037,7 @@ export function DuelArena({ pda }: { pda: string }) {
                 className={`chip${v === rematchWager ? " is-on" : ""}`}
                 onClick={() => setRematchWager(v)}
               >
-                {v} ETH{v === lastWagerEth ? " · last" : ""}
+                {v} RTB{v === lastWagerEth ? " · last" : ""}
               </button>
             ))}
           </div>
@@ -1081,7 +1047,7 @@ export function DuelArena({ pda }: { pda: string }) {
               Back
             </CoolBtn>
             <CoolBtn disabled={busy} pulse={!busy} onClick={() => void rematch()}>
-              {busy ? "Opening…" : `Lock ${rematchWager || "—"} ETH`}
+              {busy ? "Opening…" : `Lock ${rematchWager || "—"} RTB`}
             </CoolBtn>
           </div>
         </div>
@@ -1102,13 +1068,11 @@ function PlayerCard({
   accent = "var(--ember)",
   dieTone,
   vacant = false,
-  nftTokenId,
-  stakedNftId,
   advanced = false,
   eliminated = false,
 }: {
   title: string;
-  profile: { username: string; nftTokenId?: string | null } | null;
+  profile: { username: string } | null;
   wallet: string | null;
   roll: number | null;
   wins: number;
@@ -1117,13 +1081,10 @@ function PlayerCard({
   accent?: string;
   dieTone?: string;
   vacant?: boolean;
-  nftTokenId?: string | null;
-  stakedNftId?: string | null;
   advanced?: boolean;
   eliminated?: boolean;
 }) {
   const name = profile?.username ?? (wallet ? shortKey(wallet) : "Empty");
-  const characterId = nftTokenId ?? profile?.nftTokenId ?? null;
   return (
     <motion.div
       variants={stagger.item}
@@ -1150,10 +1111,6 @@ function PlayerCard({
         </div>
         {winner ? <span className="bd-crown">♛</span> : null}
       </div>
-      <DiceNftBadge tokenId={characterId} staked={Boolean(stakedNftId && stakedNftId === characterId)} />
-      {stakedNftId && stakedNftId !== characterId ? (
-        <DiceNftBadge tokenId={stakedNftId} staked />
-      ) : null}
       {vacant ? (
         <div className="bd-open-seat">
           <span>+</span>

@@ -24,7 +24,7 @@ export default function FairPage() {
         <li>
           <strong>You sit, then the host starts</strong>
           <span>
-            ETH or an NFT goes into the table contract. 1v1 up to 10 seats.
+            $RTB goes into the table. 1v1 up to 10 seats.
             The host can start with any number of players once at least two
             are in. Nothing is rolled until they confirm.
           </span>
@@ -66,8 +66,7 @@ export default function FairPage() {
         <article>
           <h2>No house fee</h2>
           <p>
-            The pot pays out in full. We don&apos;t take a cut of games. Mint
-            and creator-fee revenue goes back into the platform.
+            The pot pays out in full. We don&apos;t take a cut of games.
           </p>
         </article>
         <article>

@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     const signatureBase64 = String(
       (body as { signatureBase64?: unknown }).signatureBase64 ?? "",
     );
-    if (!isEthAddress(walletRaw)) return fail("connect an ETH wallet first");
+    if (!isEthAddress(walletRaw)) return fail("connect a wallet first");
     const xHandle = normalizeXHandle(handleRaw);
     if (!xHandle) return fail("enter a valid X handle");
     const wallet = normalizeAddress(walletRaw);

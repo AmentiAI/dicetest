@@ -17,13 +17,10 @@ export function explainChainError(e: unknown): string {
     return "Wallet rejected the transaction.";
   }
   if (/insufficient funds|exceeds the balance/i.test(parts)) {
-    return "Not enough ETH for the wager plus gas.";
-  }
-  if (/BadNft|not token owner|not owner/i.test(parts)) {
-    return "That dice NFT is not in this wallet, or it is not approved.";
+    return "Not enough $RTB for the wager plus fees.";
   }
   if (/BadWager|wager/i.test(parts)) {
-    return "Wager must match the circle, within the ETH limits.";
+    return "Wager must match the circle, within the $RTB limits.";
   }
   if (/TooEarly/i.test(parts)) {
     return "Reveal block is not in yet. Wait a few blocks.";

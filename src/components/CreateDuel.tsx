@@ -11,18 +11,16 @@ import { useEthWallet } from "@/lib/eth/wallet";
 import { useProfile } from "./ProfileProvider";
 import { ArenaPicker } from "./ArenaPicker";
 import { CoolBtn } from "./CoolBtn";
-import { NftPicker } from "./NftPicker";
 import type { ArenaId } from "@/lib/cosmetics";
 
 export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
   const { address, openConnectModal } = useEthWallet();
   const duel = useDuelActions();
-  const { profile, save } = useProfile();
+  const { profile } = useProfile();
   const router = useRouter();
   const [open, setOpen] = useState(Boolean(initialWager));
   const [wager, setWager] = useState(initialWager ?? "0.05");
   const [arena, setArena] = useState<ArenaId>("alley");
-  const [nftId, setNftId] = useState("0");
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,32 +41,22 @@ export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
       return;
     }
     const n = Number(wager);
-    const bettingNft = nftId !== "0" && nftId !== "";
-    if (!bettingNft && (n < MIN_WAGER_ETH || n > MAX_WAGER_ETH)) {
-      setError(`Wager must be ${MIN_WAGER_ETH}–${MAX_WAGER_ETH} ETH, or stake a dice NFT`);
-      return;
-    }
-    if (bettingNft && n > 0 && (n < MIN_WAGER_ETH || n > MAX_WAGER_ETH)) {
-      setError(`ETH side-bet must be ${MIN_WAGER_ETH}–${MAX_WAGER_ETH} ETH`);
+    if (!Number.isFinite(n) || n < MIN_WAGER_ETH || n > MAX_WAGER_ETH) {
+      setError(`Wager must be ${MIN_WAGER_ETH}–${MAX_WAGER_ETH} $RTB`);
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      if (bettingNft && (!profile.nftTokenId || profile.nftTokenId === "0")) {
-        await save(profile.username, nftId);
-      }
-      const tokenId = bettingNft ? BigInt(nftId) : 0n;
       const { hash, id } = await duel.createDuel({
-        wagerWei: bettingNft && n === 0 ? 0n : wei,
-        tokenId,
+        wagerWei: wei,
         maxPlayers,
       });
       const json = await postJson<{ room?: { id: string } }>("/api/rooms", {
         pda: id,
         duelId: id,
         hostWallet: address,
-        wagerLamports: (bettingNft && n === 0 ? 0n : wei).toString(),
+        wagerLamports: wei.toString(),
         createSignature: hash,
         arena,
       });
@@ -93,9 +81,9 @@ export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
             <h2>Lock a wager</h2>
             <p className="muted">
               Open a 1v1 or a free-for-all (up to {MAX_PLAYERS}). Players match
-              the stake. You start whenever you want — even before the table is
-              full. Six or more: top 5 advance, then one roll for the whole pot.
-              No house cut.
+              the $RTB stake. You start whenever you want — even before the table
+              is full. Six or more: top 5 advance, then one roll for the whole
+              pot. No house cut.
             </p>
             <div className="field">
               <span>Table size</span>
@@ -114,27 +102,21 @@ export function CreateDuel({ initialWager }: { initialWager?: string } = {}) {
               <p className="muted">{tableModeLabel(maxPlayers)}. Host confirms start.</p>
             </div>
             <label className="field">
-              <span>Wager (ETH)</span>
+              <span>Wager ($RTB)</span>
               <input
                 type="number"
-                min={0}
+                min={MIN_WAGER_ETH}
                 max={MAX_WAGER_ETH}
                 step="0.0001"
                 value={wager}
                 onChange={(e) => setWager(e.target.value)}
               />
             </label>
-            <NftPicker
-              value={nftId}
-              onChange={setNftId}
-              noneLabel="Don't stake NFT"
-              label="Bet a dice NFT (optional — winner takes both dice)"
-            />
             <ArenaPicker value={arena} onChange={setArena} />
             <div className="chip-row">
-              {["0", "0.01", "0.05", "0.1", "0.25", "1"].map((v) => (
+              {["0.01", "0.05", "0.1", "0.25", "1"].map((v) => (
                 <button key={v} type="button" className="chip" onClick={() => setWager(v)}>
-                  {v === "0" ? "NFT only" : `${v} ETH`}
+                  {v} RTB
                 </button>
               ))}
             </div>

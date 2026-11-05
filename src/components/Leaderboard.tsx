@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { formatEth, shortKey } from "@/lib/format";
 import { getJson } from "@/lib/http";
 import { WalletBadge } from "./WalletBadge";
-import { DiceNftBadge } from "./NftPicker";
 
 type Leader = {
   wallet: string;
@@ -12,7 +11,6 @@ type Leader = {
   wins: number;
   losses: number;
   volumeLamports: string;
-  nftTokenId: string | null;
   demon: string;
 };
 
@@ -40,8 +38,8 @@ export function Leaderboard() {
           <p className="dash-eyebrow">On record</p>
           <h1>Leaderboard</h1>
           <p className="muted">
-            Wins land after an on-chain settle. Volume is ETH you put at risk,
-            not profit. Equipped Block Dice NFTs show next to each name.
+            Wins land after an on-chain settle. Volume is $RTB you put at risk,
+            not profit.
           </p>
         </div>
       </header>
@@ -56,7 +54,6 @@ export function Leaderboard() {
               <div>
                 <b>{p.username}</b>
                 <p className="muted">{shortKey(p.wallet)}</p>
-                <DiceNftBadge tokenId={p.nftTokenId} />
               </div>
               <span>
                 {p.wins}W / {p.losses}L

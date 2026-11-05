@@ -2,8 +2,8 @@
 
 import { parseEventLogs } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
-import { duelAbi, nftAbi } from "./abi";
-import { DUEL_ADDRESS, NFT_ADDRESS, isContractsConfigured } from "./constants";
+import { duelAbi } from "./abi";
+import { DUEL_ADDRESS, isContractsConfigured } from "./constants";
 import { explainChainError } from "./errors";
 
 export function useDuelActions() {
@@ -16,48 +16,21 @@ export function useDuelActions() {
     return client.waitForTransactionReceipt({ hash });
   }
 
-  async function approveIfNeeded(tokenId: bigint) {
-    if (tokenId === 0n) return;
-    if (!client || !address) throw new Error("Connect a wallet first");
-    const approved = await client.readContract({
-      address: NFT_ADDRESS,
-      abi: nftAbi,
-      functionName: "getApproved",
-      args: [tokenId],
-    });
-    if (approved.toLowerCase() === DUEL_ADDRESS.toLowerCase()) return;
-    const operator = await client.readContract({
-      address: NFT_ADDRESS,
-      abi: nftAbi,
-      functionName: "isApprovedForAll",
-      args: [address, DUEL_ADDRESS],
-    });
-    if (operator) return;
-    const hash = await writeContractAsync({
-      address: NFT_ADDRESS,
-      abi: nftAbi,
-      functionName: "approve",
-      args: [DUEL_ADDRESS, tokenId],
-    });
-    await wait(hash);
-  }
-
   return {
     address: address?.toLowerCase() ?? null,
     configured: isContractsConfigured(),
     explain: explainChainError,
-    async createDuel(args: { wagerWei: bigint; tokenId: bigint; maxPlayers: number }) {
+    async createDuel(args: { wagerWei: bigint; maxPlayers: number }) {
       if (!isContractsConfigured()) {
         throw new Error(
-          "ETH contracts are not deployed. Set NEXT_PUBLIC_DUEL_ADDRESS and NEXT_PUBLIC_NFT_ADDRESS.",
+          "ETH contracts are not deployed. Set NEXT_PUBLIC_DUEL_ADDRESS.",
         );
       }
-      await approveIfNeeded(args.tokenId);
       const hash = await writeContractAsync({
         address: DUEL_ADDRESS,
         abi: duelAbi,
         functionName: "createDuel",
-        args: [args.tokenId, args.maxPlayers],
+        args: [args.maxPlayers],
         value: args.wagerWei,
       });
       const receipt = await wait(hash);
@@ -70,13 +43,12 @@ export function useDuelActions() {
       if (id == null) throw new Error("Create event missing from receipt");
       return { hash, id: id.toString() };
     },
-    async joinDuel(args: { duelId: bigint; tokenId: bigint; wagerWei: bigint }) {
-      await approveIfNeeded(args.tokenId);
+    async joinDuel(args: { duelId: bigint; wagerWei: bigint }) {
       const hash = await writeContractAsync({
         address: DUEL_ADDRESS,
         abi: duelAbi,
         functionName: "joinDuel",
-        args: [args.duelId, args.tokenId],
+        args: [args.duelId],
         value: args.wagerWei,
       });
       await wait(hash);

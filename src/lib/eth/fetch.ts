@@ -82,7 +82,6 @@ export async function fetchDuel(
     }
 
     let wallets: Address[] = [];
-    let tokens: bigint[] = [];
     let round1Rolls: number[] = [];
     let finalRolls: number[] = [];
     let advanced: boolean[] = [];
@@ -92,17 +91,16 @@ export async function fetchDuel(
         abi: duelAbi,
         functionName: "getPlayers",
         args: [id],
-      })) as [Address[], bigint[], number[], number[], boolean[]];
+      })) as [Address[], number[], number[], boolean[]];
       wallets = players[0];
-      tokens = players[1];
-      round1Rolls = players[2];
-      finalRolls = players[3];
-      advanced = players[4];
+      round1Rolls = players[1];
+      finalRolls = players[2];
+      advanced = players[3];
     }
 
     const seats: TableSeat[] = wallets.map((wallet, i) => ({
       wallet: wallet.toLowerCase(),
-      tokenId: (tokens[i] ?? 0n).toString(),
+      tokenId: "0",
       round1: Number(round1Rolls[i] ?? 0),
       final: Number(finalRolls[i] ?? 0),
       advanced: Boolean(advanced[i]),
@@ -120,8 +118,8 @@ export async function fetchDuel(
       host,
       challenger: (guest?.wallet as Address) ?? zeroAddress,
       wagerWei,
-      hostTokenId: BigInt(hostSeat?.tokenId ?? 0),
-      challengerTokenId: BigInt(guest?.tokenId ?? 0),
+      hostTokenId: 0n,
+      challengerTokenId: 0n,
       commitBlock,
       revealBlock,
       hostRoll: current(hostSeat),

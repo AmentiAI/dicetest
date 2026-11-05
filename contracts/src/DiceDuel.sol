@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface IBlockDiceNft {
-    function ownerOf(uint256 tokenId) external view returns (address);
-    function transferFrom(address from, address to, uint256 tokenId) external;
-}
-
-/// @notice 2–10 player escrow. Host starts at any filled count (≥2).
+/// @notice 2–10 player ETH escrow. Host starts at any filled count (≥2).
 /// If 6+ players, the 5 highest round-1 rolls advance; the final winner takes the pot.
 /// Fairness: start locks revealBlock = block.number + 3; settle uses that blockhash.
 contract DiceDuel {
@@ -29,7 +24,6 @@ contract DiceDuel {
     uint256 public constant MAX_WAGER = 50 ether;
     uint256 public constant HASH_WINDOW = 256;
 
-    IBlockDiceNft public immutable diceNft;
     uint256 public nextDuelId = 1;
 
     struct Table {
@@ -48,19 +42,12 @@ contract DiceDuel {
 
     mapping(uint256 => Table) public tables;
     mapping(uint256 => address[MAX_PLAYERS]) internal _seats;
-    mapping(uint256 => uint256[MAX_PLAYERS]) internal _tokenIds;
     mapping(uint256 => uint8[MAX_PLAYERS]) internal _round1;
     mapping(uint256 => uint8[MAX_PLAYERS]) internal _finals;
     mapping(uint256 => bool[MAX_PLAYERS]) internal _advanced;
 
-    event TableCreated(
-        uint256 indexed id,
-        address indexed host,
-        uint256 wagerWei,
-        uint256 tokenId,
-        uint8 maxPlayers
-    );
-    event PlayerJoined(uint256 indexed id, address indexed player, uint256 tokenId, uint8 playerCount);
+    event TableCreated(uint256 indexed id, address indexed host, uint256 wagerWei, uint8 maxPlayers);
+    event PlayerJoined(uint256 indexed id, address indexed player, uint8 playerCount);
     event PlayerLeft(uint256 indexed id, address indexed player, uint8 playerCount);
     event MatchStarted(uint256 indexed id, uint8 playerCount, uint64 revealBlock);
     event RoundSettled(uint256 indexed id, uint8 phase, bytes32 entropy);
@@ -70,8 +57,6 @@ contract DiceDuel {
 
     error BadStatus();
     error BadWager();
-    error BadStake();
-    error BadNft();
     error BadMax();
     error AlreadySeated();
     error TableFull();
@@ -83,15 +68,9 @@ contract DiceDuel {
     error NotHost();
     error NotSeated();
 
-    constructor(address nft) {
-        diceNft = IBlockDiceNft(nft);
-    }
-
-    function createDuel(uint256 tokenId, uint8 maxPlayers) external payable returns (uint256 id) {
+    function createDuel(uint8 maxPlayers) external payable returns (uint256 id) {
         if (maxPlayers < MIN_PLAYERS || maxPlayers > MAX_PLAYERS) revert BadMax();
-        if (msg.value != 0 && (msg.value < MIN_WAGER || msg.value > MAX_WAGER)) revert BadWager();
-        if (msg.value == 0 && tokenId == 0) revert BadStake();
-        _pullNft(msg.sender, tokenId);
+        if (msg.value < MIN_WAGER || msg.value > MAX_WAGER) revert BadWager();
         id = nextDuelId++;
         tables[id] = Table({
             host: msg.sender,
@@ -107,28 +86,19 @@ contract DiceDuel {
             winnerRoll: 0
         });
         _seats[id][0] = msg.sender;
-        _tokenIds[id][0] = tokenId;
-        emit TableCreated(id, msg.sender, msg.value, tokenId, maxPlayers);
+        emit TableCreated(id, msg.sender, msg.value, maxPlayers);
     }
 
-    function joinDuel(uint256 id, uint256 tokenId) external payable {
+    function joinDuel(uint256 id) external payable {
         Table storage t = tables[id];
         if (t.status != WAITING) revert BadStatus();
         if (t.playerCount >= t.maxPlayers) revert TableFull();
         if (_indexOf(id, msg.sender) < t.playerCount) revert AlreadySeated();
         if (msg.value != t.wagerWei) revert BadWager();
-        bool nftTable = _tokenIds[id][0] > 0;
-        if (nftTable) {
-            if (tokenId == 0) revert BadNft();
-            _pullNft(msg.sender, tokenId);
-        } else if (tokenId != 0) {
-            revert BadNft();
-        }
         uint8 i = t.playerCount;
         _seats[id][i] = msg.sender;
-        _tokenIds[id][i] = tokenId;
         t.playerCount = i + 1;
-        emit PlayerJoined(id, msg.sender, tokenId, t.playerCount);
+        emit PlayerJoined(id, msg.sender, t.playerCount);
     }
 
     function leave(uint256 id) external {
@@ -144,17 +114,13 @@ contract DiceDuel {
             }
         }
         if (found == n) revert NotSeated();
-        uint256 token = _tokenIds[id][found];
         uint8 last = n - 1;
         if (found != last) {
             _seats[id][found] = _seats[id][last];
-            _tokenIds[id][found] = _tokenIds[id][last];
         }
         _seats[id][last] = address(0);
-        _tokenIds[id][last] = 0;
         t.playerCount = last;
         _pay(msg.sender, t.wagerWei);
-        _pushNft(msg.sender, token);
         emit PlayerLeft(id, msg.sender, t.playerCount);
     }
 
@@ -223,7 +189,6 @@ contract DiceDuel {
         view
         returns (
             address[] memory wallets,
-            uint256[] memory tokens,
             uint8[] memory round1Rolls,
             uint8[] memory finalRolls,
             bool[] memory advanced
@@ -231,13 +196,11 @@ contract DiceDuel {
     {
         uint8 n = tables[id].playerCount;
         wallets = new address[](n);
-        tokens = new uint256[](n);
         round1Rolls = new uint8[](n);
         finalRolls = new uint8[](n);
         advanced = new bool[](n);
         for (uint8 i = 0; i < n; i++) {
             wallets[i] = _seats[id][i];
-            tokens[i] = _tokenIds[id][i];
             round1Rolls[i] = _round1[id][i];
             finalRolls[i] = _finals[id][i];
             advanced[i] = _advanced[id][i];
@@ -327,9 +290,6 @@ contract DiceDuel {
         t.winnerRoll = bestRoll;
         t.status = SETTLED;
         _pay(winner, t.wagerWei * uint256(n));
-        for (uint8 i = 0; i < n; i++) {
-            _pushNft(winner, _tokenIds[id][i]);
-        }
         emit TableSettled(id, winner, bestRoll, entropy);
     }
 
@@ -337,9 +297,7 @@ contract DiceDuel {
         Table storage t = tables[id];
         uint8 n = t.playerCount;
         for (uint8 i = 0; i < n; i++) {
-            address p = _seats[id][i];
-            _pay(p, t.wagerWei);
-            _pushNft(p, _tokenIds[id][i]);
+            _pay(_seats[id][i], t.wagerWei);
         }
     }
 
@@ -349,17 +307,6 @@ contract DiceDuel {
             if (_seats[id][i] == player) return i;
         }
         return n;
-    }
-
-    function _pullNft(address from, uint256 tokenId) internal {
-        if (tokenId == 0) return;
-        if (diceNft.ownerOf(tokenId) != from) revert BadNft();
-        diceNft.transferFrom(from, address(this), tokenId);
-    }
-
-    function _pushNft(address to, uint256 tokenId) internal {
-        if (tokenId == 0 || to == address(0)) return;
-        diceNft.transferFrom(address(this), to, tokenId);
     }
 
     function _pay(address to, uint256 amount) internal {

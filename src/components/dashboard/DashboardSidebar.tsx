@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GameIcon } from "@/components/GameIcon";
 import { PLAY_LOCKED } from "@/lib/waitlist";
+import { TOKEN } from "@/lib/token";
 
 const NAV = [
   {
@@ -57,19 +58,31 @@ const NAV = [
   },
 ];
 
-export function DashboardSidebar() {
+export function DashboardSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
     <aside className="dash-sidebar">
-      <Link href="/" className="dash-brand">
-        <span className="dash-brand-icon">
-          <GameIcon name="dice" size={22} />
-        </span>
-        <span className="dash-brand-text">
-          ROLL THE <strong>BLOCK</strong>
-        </span>
-      </Link>
+      <div className="dash-sidebar-head">
+        <Link href="/" className="dash-brand" onClick={onNavigate}>
+          <span className="dash-brand-icon">
+            <GameIcon name="dice" size={22} />
+          </span>
+          <span className="dash-brand-text">
+            ROLL THE <strong>BLOCK</strong>
+          </span>
+        </Link>
+        {onNavigate ? (
+          <button
+            type="button"
+            className="dash-drawer-close"
+            aria-label="Close menu"
+            onClick={onNavigate}
+          >
+            <GameIcon name="close" size={18} />
+          </button>
+        ) : null}
+      </div>
 
       <nav className="dash-nav">
         {NAV.map((item) => {
@@ -89,7 +102,7 @@ export function DashboardSidebar() {
             );
           }
           return (
-            <Link key={item.label} href={item.href} className={className}>
+            <Link key={item.label} href={item.href} className={className} onClick={onNavigate}>
               {inner}
             </Link>
           );
@@ -97,6 +110,15 @@ export function DashboardSidebar() {
       </nav>
 
       <div className="dash-sidebar-foot">
+        <a
+          className="dash-nav-item"
+          href={TOKEN.pumpUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <GameIcon name="eth" size={18} />
+          <span>{`Buy $${TOKEN.symbol}`}</span>
+        </a>
         <div className="dash-social">
           <a href="https://x.com" target="_blank" rel="noreferrer" aria-label="Twitter">
             𝕏

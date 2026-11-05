@@ -9,7 +9,7 @@ import { formatUsd } from "@/lib/format";
 import { getJson } from "@/lib/http";
 import { PLAY_LOCKED } from "@/lib/waitlist";
 
-export function DashboardTopbar() {
+export function DashboardTopbar({ onMenu }: { onMenu?: () => void }) {
   const { address } = useAccount();
   const { data: bal } = useBalance({ address });
   const [price, setPrice] = useState<number | null>(null);
@@ -28,13 +28,24 @@ export function DashboardTopbar() {
 
   return (
     <header className="dash-topbar">
+      <button
+        type="button"
+        className="dash-menu-btn"
+        aria-label="Open menu"
+        onClick={onMenu}
+      >
+        <GameIcon name="menu" size={20} />
+      </button>
+      <Link href="/" className="dash-topbar-brand">
+        ROLL THE <strong>BLOCK</strong>
+      </Link>
       <div className="dash-topbar-spacer" />
 
       <div className="dash-topbar-actions">
         {eth != null ? (
           <div className="dash-balance">
             <span className="dash-balance-sol">
-              {eth.toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH
+              {eth.toLocaleString(undefined, { maximumFractionDigits: 4 })} RTB
             </span>
             <span className="dash-balance-usd">{formatUsd(eth, price)}</span>
           </div>
@@ -42,22 +53,22 @@ export function DashboardTopbar() {
 
         <button
           type="button"
-          className="dash-icon-btn"
+          className="dash-icon-btn dash-icon-desk"
           aria-label="Notifications"
         >
           <GameIcon name="bell" size={18} />
         </button>
         {PLAY_LOCKED ? null : (
-          <Link href="/history" className="dash-icon-btn" aria-label="Statistics">
+          <Link href="/history" className="dash-icon-btn dash-icon-desk" aria-label="Statistics">
             <GameIcon name="chart" size={18} />
           </Link>
         )}
-        <Link href="/fair" className="dash-icon-btn" aria-label="Help">
+        <Link href="/fair" className="dash-icon-btn dash-icon-desk" aria-label="Help">
           <GameIcon name="help" size={18} />
         </Link>
         <button
           type="button"
-          className={`dash-icon-btn${sound ? " on" : ""}`}
+          className={`dash-icon-btn dash-icon-desk${sound ? " on" : ""}`}
           aria-label={sound ? "Mute" : "Unmute"}
           onClick={() => {
             const next = !sound;

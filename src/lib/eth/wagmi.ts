@@ -17,7 +17,7 @@ export const wagmiConfig = createConfig({
       showQrModal: true,
       metadata: {
         name: "BLOCK DICE",
-        description: "ETH dice tables. 1v1 to free-for-all. Bet ETH or your dice NFT.",
+        description: "$RTB dice tables. 1v1 to free-for-all. Winner takes the pot.",
         url: "https://blockdice.local",
         icons: [],
       },
