@@ -36,11 +36,11 @@ const NAV = [
     locked: true,
   },
   {
-    href: "/",
-    label: "Rewards",
+    href: "/giveaway",
+    label: "SOL Giveaway",
     icon: "rewards" as const,
-    match: () => false,
-    locked: true,
+    match: (p: string) => p.startsWith("/giveaway"),
+    locked: false,
   },
   {
     href: "/fair",

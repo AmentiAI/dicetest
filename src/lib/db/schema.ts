@@ -71,7 +71,17 @@ export const waitlist = pgTable("waitlist", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const giveawayEntries = pgTable("giveaway_entries", {
+  id: serial("id").primaryKey(),
+  wallet: text("wallet").notNull().unique(),
+  signature: text("signature").notNull().unique(),
+  amount: text("amount").notNull(),
+  usdAtJoin: text("usd_at_join").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type Profile = typeof profiles.$inferSelect;
 export type Room = typeof rooms.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type WaitlistRow = typeof waitlist.$inferSelect;
+export type GiveawayEntry = typeof giveawayEntries.$inferSelect;

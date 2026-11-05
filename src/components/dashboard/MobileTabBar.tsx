@@ -14,7 +14,12 @@ const TABS = [
     match: (p: string) => p === "/circles" || p.startsWith("/duel"),
     locked: PLAY_LOCKED,
   },
-  { href: "/fair", label: "Fair", icon: "shield" as const, match: (p: string) => p.startsWith("/fair") },
+  {
+    href: "/giveaway",
+    label: "Giveaway",
+    icon: "rewards" as const,
+    match: (p: string) => p.startsWith("/giveaway"),
+  },
   {
     href: PLAY_LOCKED ? "/" : "/history",
     label: "Stats",

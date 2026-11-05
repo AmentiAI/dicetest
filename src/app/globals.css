@@ -6514,6 +6514,53 @@ a.btn-ember:hover { color: #fff; }
   margin: 4px 0 8px;
 }
 
+.giveaway-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  flex-wrap: wrap;
+}
+.giveaway-banner h2 {
+  margin: 4px 0 8px;
+  font-size: 22px;
+}
+.giveaway-banner p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.giveaway-meta {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  max-width: 420px;
+}
+.giveaway-meta > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 14px;
+  color: #94a3b8;
+}
+.giveaway-quote {
+  font-family: var(--font-mono);
+  color: #f1f5f9;
+}
+.giveaway-dest {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #e2e8f0;
+  word-break: break-all;
+}
+
 .nft-reel {
   margin: 0;
   padding: 4px 0 0;
@@ -7246,6 +7293,13 @@ a,
 }
 
 @media (max-width: 640px) {
+  .giveaway-banner {
+    padding: 18px;
+  }
+  .giveaway-banner .cool-btn-wrap,
+  .giveaway-banner .cool-btn {
+    width: 100%;
+  }
   .dash-stats-row {
     grid-template-columns: 1fr;
   }

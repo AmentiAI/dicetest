@@ -213,6 +213,20 @@ export function LandingPage() {
         </div>
       </section>
 
+      <section className="glass-panel giveaway-banner">
+        <div>
+          <p className="dash-eyebrow">SOL giveaway</p>
+          <h2>{`Join for $25 of $${TOKEN.symbol}`}</h2>
+          <p>
+            Pay the dev wallet from Phantom. One entry per Solana wallet.
+          </p>
+        </div>
+        <CoolBtn href="/giveaway" pulse>
+          <GameIcon name="rewards" size={18} />
+          Enter giveaway
+        </CoolBtn>
+      </section>
+
       <section className="dash-stats-row">
         {[
           {
